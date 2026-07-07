@@ -30,3 +30,6 @@ prisma/migrations/
 !.vscode/extensions.json
 .DS_Store
 Thumbs.db
+
+# ── Kiro IDE workspace (internal specs / settings) ──────────
+.kiro/
