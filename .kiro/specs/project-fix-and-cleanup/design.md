@@ -55,7 +55,7 @@ flowchart LR
 ### Schema-ownership policy (single source of truth)
 
 1. **Flyway** is the sole owner of DDL/DML applied to the database.
-2. **Hibernate** runs in `validate`/`none` mode only Èà•?it never creates or alters tables.
+2. **Hibernate** runs in `validate`/`none` mode only ‚Ä?it never creates or alters tables.
 3. The **only** canonical SQL lives on the classpath at `backend-java/src/main/resources/db/migration`. The `bigdata/sql/` tree is source material that is converted, folded into the classpath migration, then deleted.
 
 ## Components and Interfaces
@@ -64,16 +64,16 @@ flowchart LR
 
 Create directory `backend-java/src/main/resources/db/migration` containing:
 
-- `V1__init_schema.sql` Èà•?full DDL (the union of the 13 DDL/migration files), MySQL 8.0 syntax.
-- `V2__seed_data.sql` Èà•?seed/DML (the union of the 14 DML files), MySQL 8.0 syntax, idempotent (`INSERT IGNORE`).
+- `V1__init_schema.sql` ‚Ä?full DDL (the union of the 13 DDL/migration files), MySQL 8.0 syntax.
+- `V2__seed_data.sql` ‚Ä?seed/DML (the union of the 14 DML files), MySQL 8.0 syntax, idempotent (`INSERT IGNORE`).
 
 `FlywayConfig.java` already resolves `classpath:db/migration` with `baselineOnMigrate(true)`; no Java change is required for it to pick these up. The hardcoded location in `FlywayConfig` and the `spring.flyway.locations` in the YAML files agree, so they remain consistent.
 
-**Decision Èà•?two files, not one.** The requirements allow an optional separate seed file. Splitting schema (V1) from seed (V2) keeps DDL replayable reasoning clean and lets the seed evolve independently. Both live on the classpath and are the single canonical source; `bigdata/sql/` copies are deleted afterward (Req 11.7).
+**Decision ‚Ä?two files, not one.** The requirements allow an optional separate seed file. Splitting schema (V1) from seed (V2) keeps DDL replayable reasoning clean and lets the seed evolve independently. Both live on the classpath and are the single canonical source; `bigdata/sql/` copies are deleted afterward (Req 11.7).
 
 ### 2. SQL conversion pipeline (Req 2, 3, 4)
 
-The consolidated SQL is produced primarily by **adopting and completing `bigdata/sql/init_mysql.sql`**, which is already ~95% MySQL-converted, then validating it against the PostgreSQLÈà´Êâ¢ySQL rules and the entity definitions. Where `init_mysql.sql` is missing tables present only in the PostgreSQL `ddl/`, those tables are converted and added.
+The consolidated SQL is produced primarily by **adopting and completing `bigdata/sql/init_mysql.sql`**, which is already ~95% MySQL-converted, then validating it against the PostgreSQL‚ÜíMySQL rules and the entity definitions. Where `init_mysql.sql` is missing tables present only in the PostgreSQL `ddl/`, those tables are converted and added.
 
 Conversion rules applied (authoritative table from requirements):
 
@@ -91,15 +91,15 @@ Conversion rules applied (authoritative table from requirements):
 | `CREATE INDEX IF NOT EXISTS` | `CREATE INDEX idx_xxx ON t(col)` |
 | `INSERT ... ON CONFLICT DO NOTHING` | `INSERT IGNORE` |
 
-**Decision Èà•?`CHAR(36)` vs `VARCHAR(36)` for ids.** The existing `init_mysql.sql` uses `VARCHAR(36)`; the requirements rule table specifies `CHAR(36)`. The design standardizes on **`CHAR(36)`** for id/FK columns to follow the authoritative rule and to match fixed-length UUID semantics. This is a mechanical normalization applied during consolidation.
+**Decision ‚Ä?`CHAR(36)` vs `VARCHAR(36)` for ids.** The existing `init_mysql.sql` uses `VARCHAR(36)`; the requirements rule table specifies `CHAR(36)`. The design standardizes on **`CHAR(36)`** for id/FK columns to follow the authoritative rule and to match fixed-length UUID semantics. This is a mechanical normalization applied during consolidation.
 
-**Decision Èà•?timestamp precision.** Requirements specify `DATETIME(3)`. The current `init_mysql.sql` uses bare `TIMESTAMP`. The consolidated file standardizes on `DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3)` (and `ON UPDATE` for `updated_at`) to avoid MySQL's single-`TIMESTAMP`-auto-init limitation and match entity `LocalDateTime` fields.
+**Decision ‚Ä?timestamp precision.** Requirements specify `DATETIME(3)`. The current `init_mysql.sql` uses bare `TIMESTAMP`. The consolidated file standardizes on `DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3)` (and `ON UPDATE` for `updated_at`) to avoid MySQL's single-`TIMESTAMP`-auto-init limitation and match entity `LocalDateTime` fields.
 
 ### 3. Entity / schema reconciliation (Req 3, 5)
 
 This is the highest-risk interface because Hibernate runs `validate`. Two sub-problems:
 
-**(a) Table/column name alignment** Èà•?verified against the actual entities:
+**(a) Table/column name alignment** ‚Ä?verified against the actual entities:
 
 | Concept | Entity `@Table` / `@Column` (actual) | Migration must use |
 |---|---|---|
@@ -110,12 +110,12 @@ This is the highest-risk interface because Hibernate runs `validate`. Two sub-pr
 | Customer tickets | `customer_tickets` | `customer_tickets` |
 | Purchase orders | `purchase_orders` | `purchase_orders` |
 
-**(b) `columnDefinition` mismatch (documented deviation + decision).** Many entities declare `@Column(columnDefinition = "uuid")` and `@Column(columnDefinition = "jsonb")` Èà•?PostgreSQL type names. Under `MySQLDialect`, Hibernate `validate` compares the entity's expected type against the live column. The cleanest, lowest-risk path that satisfies "Flyway owns schema, JPA only validates":
+**(b) `columnDefinition` mismatch (documented deviation + decision).** Many entities declare `@Column(columnDefinition = "uuid")` and `@Column(columnDefinition = "jsonb")` ‚Ä?PostgreSQL type names. Under `MySQLDialect`, Hibernate `validate` compares the entity's expected type against the live column. The cleanest, lowest-risk path that satisfies "Flyway owns schema, JPA only validates":
 
 - The migration creates id/FK columns as `CHAR(36)` and JSON columns as `JSON`.
-- The entities' `columnDefinition = "uuid"` / `"jsonb"` are **PostgreSQL-specific literals** that do not match MySQL's reported column types and can trip `validate`. The design resolves this by **normalizing the affected entity `columnDefinition` values to MySQL types** (`uuid` Èà´?`char(36)`, `jsonb` Èà´?`json`) as part of the reconciliation, ORÈà•Êîäf entity edits are out of scope for a given columnÈà•Êîîelying on Hibernate's type mapping with `validate` tolerance verified during the Flyway init test (Req 7). The chosen approach is to **edit the entity `columnDefinition` literals to MySQL types**, because it is deterministic and keeps `validate` strict. Each edited entity is listed in the task plan.
+- The entities' `columnDefinition = "uuid"` / `"jsonb"` are **PostgreSQL-specific literals** that do not match MySQL's reported column types and can trip `validate`. The design resolves this by **normalizing the affected entity `columnDefinition` values to MySQL types** (`uuid` ‚Ü?`char(36)`, `jsonb` ‚Ü?`json`) as part of the reconciliation, OR‚Äîif entity edits are out of scope for a given column‚Äîrelying on Hibernate's type mapping with `validate` tolerance verified during the Flyway init test (Req 7). The chosen approach is to **edit the entity `columnDefinition` literals to MySQL types**, because it is deterministic and keeps `validate` strict. Each edited entity is listed in the task plan.
 
-> Deviation note (Req 3.5 / Req 3.3): The `data_scopes` table as defined by the `DataScope` entity uses columns `role_id`, `scope_type`, `store_ids` (JSON), `product_ids` (JSON), `created_at`, `updated_at`. It does **not** contain `org_id` or a single `scope_config` column as Requirement 3.3 anticipated. Per Req 3.5 ("follow the actual entity definitions discovered in the codebase"), the migration follows the entity: it creates `store_ids`/`product_ids` JSON columns and keeps `scope_type` values aligned to the entity-supported set (`all_company`/`department`/`own`/`assigned_store`/`assigned_product`). Seed DML maps legacy `all` Èà´?`all_company` and `assigned` Èà´?`assigned_store`. This deviation is recorded here as required.
+> Deviation note (Req 3.5 / Req 3.3): The `data_scopes` table as defined by the `DataScope` entity uses columns `role_id`, `scope_type`, `store_ids` (JSON), `product_ids` (JSON), `created_at`, `updated_at`. It does **not** contain `org_id` or a single `scope_config` column as Requirement 3.3 anticipated. Per Req 3.5 ("follow the actual entity definitions discovered in the codebase"), the migration follows the entity: it creates `store_ids`/`product_ids` JSON columns and keeps `scope_type` values aligned to the entity-supported set (`all_company`/`department`/`own`/`assigned_store`/`assigned_product`). Seed DML maps legacy `all` ‚Ü?`all_company` and `assigned` ‚Ü?`assigned_store`. This deviation is recorded here as required.
 
 **Missing tables (Req 4).** `login_logs`, `purchase_requests`, `cash_flow`, `receivables`, `payables`, `customer_tickets` are confirmed absent from the Java `@Table` set except `customer_tickets` (which exists as an entity) and `purchase_orders` (a related but distinct table). The consolidated migration defines all six tables. `init_mysql.sql` already contains `cash_flow`, `receivables`, `payables`, and `customer_tickets`; `login_logs` and `purchase_requests` are added from the converted DDL/DML. Reconciliation: `purchase_requests` is distinct from `purchase_orders` (request vs order) and both are kept.
 
@@ -135,8 +135,8 @@ Add `mvnw`, `mvnw.cmd`, and `.mvn/wrapper/maven-wrapper.properties` to `backend-
 
 ### 6. Port / proxy / CORS consistency (Req 8, 14)
 
-- `server.port: 8090` Èà•?unchanged (already correct).
-- `vite.config.ts` dev proxy `/api` Èà´?backend `8090` Èà•?confirm/keep target host:port consistent (`http://YOUR_SERVER_IP:8090` for the deployment target; `localhost:8090` is acceptable for pure local dev). The deployed **frontend** is served on `8080`.
+- `server.port: 8090` ‚Ä?unchanged (already correct).
+- `vite.config.ts` dev proxy `/api` ‚Ü?backend `8090` ‚Ä?confirm/keep target host:port consistent (`http://YOUR_SERVER_IP:8090` for the deployment target; `localhost:8090` is acceptable for pure local dev). The deployed **frontend** is served on `8080`.
 - README updated so all port references agree: Backend `8090`, Frontend `8080` (README currently says proxy targets `localhost:8080`, which is wrong and will be corrected).
 - **CORS**: `WebConfig.java` hardcodes `http://localhost:5173`. Refactor to read allowed origins from the `adpilot.cors.allowed-origins` property (already present in `application.yml`) so prod can include `http://YOUR_SERVER_IP:8080` and `http://YOUR_SERVER_IP`. `application-prod.yml` sets the prod origins.
 
@@ -209,14 +209,14 @@ CREATE TABLE payables ( id CHAR(36) PRIMARY KEY DEFAULT (UUID()), /* ... */ );
 CREATE TABLE customer_tickets ( id CHAR(36) PRIMARY KEY DEFAULT (UUID()), /* ... */ );
 ```
 
-Flyway metadata: a `flyway_schema_history` table is created automatically and records `V1` and `V2` (the consolidated files) as success. Note: with consolidation into V1/V2, the history records two versioned migrations rather than V1Èà•Êè§13; Req 7.1's "V1 through V13" is satisfied in spirit by recording the full schema as successful versioned migrations. This consolidation choice is documented per Req 1.4/1.5.
+Flyway metadata: a `flyway_schema_history` table is created automatically and records `V1` and `V2` (the consolidated files) as success. Note: with consolidation into V1/V2, the history records two versioned migrations rather than V1‚ÄìV13; Req 7.1's "V1 through V13" is satisfied in spirit by recording the full schema as successful versioned migrations. This consolidation choice is documented per Req 1.4/1.5.
 
 ### Entity column-definition edits (MySQL alignment)
 
 The following entity column definitions are normalized from PostgreSQL literals to MySQL types so `validate` passes:
 
-- `columnDefinition = "uuid"` Èà´?`columnDefinition = "char(36)"` (all id/FK UUID columns across `user`, `warehouse`, `store`, `task`, `supplier`, `settlement`, `rollback`, etc.).
-- `columnDefinition = "jsonb"` Èà´?`columnDefinition = "json"` (`DataScope.storeIds`/`productIds`, `ProductUploadJobEntity.payload`/`response`, and any others discovered).
+- `columnDefinition = "uuid"` ‚Ü?`columnDefinition = "char(36)"` (all id/FK UUID columns across `user`, `warehouse`, `store`, `task`, `supplier`, `settlement`, `rollback`, etc.).
+- `columnDefinition = "jsonb"` ‚Ü?`columnDefinition = "json"` (`DataScope.storeIds`/`productIds`, `ProductUploadJobEntity.payload`/`response`, and any others discovered).
 
 The exact, complete list is enumerated during implementation by scanning `**/entity/**/*.java`.
 
@@ -248,7 +248,7 @@ Cross-check every `@Table`/`@Column` name against the consolidated DDL (script o
 - Backend: `./mvnw clean compile` and `./mvnw clean package` from `backend-java/` (and cross-check with global Maven at `E:\apache-maven-3.9.9`). Both must succeed without a global Maven on PATH.
 - Frontend: `pnpm install && pnpm build` in `frontend/` must complete without errors after cleanup.
 
-### Flyway + MySQL initialization (Req 7) Èà•?integration/smoke test (1Èà•? runs)
+### Flyway + MySQL initialization (Req 7) ‚Ä?integration/smoke test (1‚Ä? runs)
 
 Against an empty MySQL 8.0 `adpilot` database (charset `utf8mb4`, collation `utf8mb4_unicode_ci`):
 

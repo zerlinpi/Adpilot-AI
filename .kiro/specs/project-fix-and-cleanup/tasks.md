@@ -17,7 +17,7 @@ Per the design's Testing Strategy, property-based testing does not apply to this
 
   - [x] 1.2 Inventory legacy SQL source material
     - Read `bigdata/sql/init_mysql.sql` as the primary (~95% converted) source material
-    - Enumerate the PostgreSQL `bigdata/sql/ddl/`, `dml/`, `migration/` (V1鈥揤13) tables to identify any tables absent from `init_mysql.sql`, including `login_logs` and `purchase_requests`
+    - Enumerate the PostgreSQL `bigdata/sql/ddl/`, `dml/`, `migration/` (V1–V13) tables to identify any tables absent from `init_mysql.sql`, including `login_logs` and `purchase_requests`
     - _Requirements: 1.5, 2.1, 4.1_
 
 - [x] 2. Create the classpath Flyway schema migration
@@ -25,7 +25,7 @@ Per the design's Testing Strategy, property-based testing does not apply to this
     - Create directory `backend-java/src/main/resources/db/migration`
     - Author `V1__init_schema.sql` (MySQL 8.0 DDL) by adopting/completing `bigdata/sql/init_mysql.sql`, covering the union of the 13 DDL/migration files with no tables lost
     - Standardize id/FK columns to `CHAR(36)` (with `DEFAULT (UUID())` on primary keys), `JSON` for jsonb columns, `DATETIME(3) DEFAULT CURRENT_TIMESTAMP(3)` (and `ON UPDATE CURRENT_TIMESTAMP(3)` for `updated_at`), and `DECIMAL(p,s)` for numerics
-    - Apply the PostgreSQL鈫扢ySQL 8.0 conversion rules; do not emit `CREATE EXTENSION`, `uuid_generate_v4()`, `TIMESTAMPTZ`, `JSONB`, `NUMERIC(...)`, `ON CONFLICT`, or `CREATE INDEX IF NOT EXISTS`
+    - Apply the PostgreSQL→MySQL 8.0 conversion rules; do not emit `CREATE EXTENSION`, `uuid_generate_v4()`, `TIMESTAMPTZ`, `JSONB`, `NUMERIC(...)`, `ON CONFLICT`, or `CREATE INDEX IF NOT EXISTS`
     - _Requirements: 1.1, 1.2, 1.4, 1.5, 2.1, 2.2, 2.3, 2.6_
 
   - [x] 2.2 Reconcile entity-aligned table/column names in V1__init_schema.sql
@@ -40,7 +40,7 @@ Per the design's Testing Strategy, property-based testing does not apply to this
 
   - [x] 2.4 Create V2__seed_data.sql
     - Author `V2__seed_data.sql` (MySQL 8.0 DML) as the union of the seed/DML files, idempotent via `INSERT IGNORE`
-    - Map legacy `data_scopes.scope_type` values `all` 鈫?`all_company` and `assigned` 鈫?`assigned_store`
+    - Map legacy `data_scopes.scope_type` values `all` �?`all_company` and `assigned` �?`assigned_store`
     - _Requirements: 1.1, 1.2, 2.2, 2.3, 3.3_
 
   - [x] 2.5 Static SQL validation of the consolidated migrations
@@ -54,7 +54,7 @@ Per the design's Testing Strategy, property-based testing does not apply to this
 
 - [x] 3. Normalize entity columnDefinition literals to MySQL types
   - [x] 3.1 Edit entity columnDefinition values from PostgreSQL to MySQL literals
-    - Using the list from task 1.1, change `columnDefinition = "uuid"` 鈫?`"char(36)"` and `columnDefinition = "jsonb"` 鈫?`"json"` across all affected entities (e.g. `User`, `DataScope` `storeIds`/`productIds`, `WarehouseInventoryEntity`, `ProductUploadJobEntity` `payload`/`response`, and others discovered)
+    - Using the list from task 1.1, change `columnDefinition = "uuid"` �?`"char(36)"` and `columnDefinition = "jsonb"` �?`"json"` across all affected entities (e.g. `User`, `DataScope` `storeIds`/`productIds`, `WarehouseInventoryEntity`, `ProductUploadJobEntity` `payload`/`response`, and others discovered)
     - Ensure edited definitions match the column types created by `V1__init_schema.sql` so Hibernate `validate` passes
     - _Requirements: 3.1, 5.4_
 

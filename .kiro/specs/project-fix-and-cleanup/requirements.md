@@ -8,13 +8,13 @@ The system under repair consists of a React/TypeScript/Vite frontend, a Java 17 
 
 ## Confirmed Audit Findings (verified against the codebase)
 
-- The V1鈥揤13 Flyway migration files under `bigdata/sql/migration/` are written in **PostgreSQL** syntax: confirmed counts include 194 `TIMESTAMPTZ`, 99 `uuid_generate_v4()`, 64 `JSONB`, 120 `NUMERIC(...)`, 2 `CREATE EXTENSION`, and 291 `UUID`-type usages. They cannot run on MySQL 8.0 as-is.
+- The V1–V13 Flyway migration files under `bigdata/sql/migration/` are written in **PostgreSQL** syntax: confirmed counts include 194 `TIMESTAMPTZ`, 99 `uuid_generate_v4()`, 64 `JSONB`, 120 `NUMERIC(...)`, 2 `CREATE EXTENSION`, and 291 `UUID`-type usages. They cannot run on MySQL 8.0 as-is.
 - `backend-java/src/main/resources/db/migration` does **not** exist; Flyway is configured (in `application.yml`, `application-dev.yml`, and hardcoded in `FlywayConfig.java`) to read `classpath:db/migration`, which is currently empty. Schema initialization therefore fails.
-- `application.yml` sets `ddl-auto: validate` while `application-dev.yml` overrides to `update` 鈥?a conflict given Flyway owns the schema.
+- `application.yml` sets `ddl-auto: validate` while `application-dev.yml` overrides to `update` �?a conflict given Flyway owns the schema.
 - The backend connector and dialect are MySQL (`com.mysql.cj.jdbc.Driver`, `MySQLDialect`), confirming **MySQL 8.0 is the source of truth**.
 - Maven is available locally at `E:\apache-maven-3.9.9`; there is no Maven wrapper in `backend-java/`.
 
-## PostgreSQL 鈫?MySQL 8.0 Conversion Rules (authoritative)
+## PostgreSQL �?MySQL 8.0 Conversion Rules (authoritative)
 
 | PostgreSQL | MySQL 8.0 |
 |---|---|
@@ -60,7 +60,7 @@ The system under repair consists of a React/TypeScript/Vite frontend, a Java 17 
 4. THE project SHALL retain exactly one canonical SQL source on the classpath and SHALL NOT keep multiple divergent copies of the schema.
 5. THE Consolidated_SQL_File SHALL contain the full schema equivalent to the union of the previous thirteen DDL/migration files, with no tables lost.
 
-### Requirement 2: Convert V1鈥揤13 Migrations from PostgreSQL to MySQL 8.0
+### Requirement 2: Convert V1–V13 Migrations from PostgreSQL to MySQL 8.0
 
 **User Story:** As a backend developer, I want the migration scripts converted to valid MySQL 8.0 syntax, so that Flyway applies them on a MySQL 8.0 database without errors.
 
@@ -68,7 +68,7 @@ The system under repair consists of a React/TypeScript/Vite frontend, a Java 17 
 
 1. THE Migration_Scripts SHALL use MySQL 8.0 dialect syntax exclusively and SHALL NOT contain any PostgreSQL-only construct.
 2. THE Migration_Scripts SHALL NOT contain `CREATE EXTENSION`, `uuid_generate_v4()`, `uuid-ossp`, `pgcrypto`, `TIMESTAMPTZ`, `JSONB`, `NUMERIC(...)`, or `... ON CONFLICT ...`.
-3. WHERE a PostgreSQL construct is present, THE Migration_Script SHALL be converted according to the PostgreSQL 鈫?MySQL 8.0 Conversion Rules table in this document.
+3. WHERE a PostgreSQL construct is present, THE Migration_Script SHALL be converted according to the PostgreSQL �?MySQL 8.0 Conversion Rules table in this document.
 4. WHEN Flyway applies the Migration_Scripts to a MySQL 8.0 Database, THE Flyway SHALL complete the migration without syntax errors.
 5. THE Consolidated_SQL_File SHALL use Flyway versioned naming and SHALL NOT have duplicate version numbers among the migration files on the classpath.
 6. WHERE `CREATE INDEX IF NOT EXISTS` appears, THE Migration_Script SHALL use plain `CREATE INDEX idx_xxx ON table(column)` because Flyway applies each script exactly once.
@@ -81,7 +81,7 @@ The system under repair consists of a React/TypeScript/Vite frontend, a Java 17 
 
 1. THE Migration_Scripts SHALL define table and column names that match the corresponding Java `@Entity` / `@TableName` / MyBatis mapper definitions.
 2. WHERE a known mismatch exists, THE Migration_Scripts SHALL use the entity-aligned names: `suppliers` SHALL use `supplier_name` and `contact_email` (not `name`/`email`); warehouse inventory SHALL use `warehouse_location_id`, `quantity_on_hand`, `quantity_reserved`, `quantity_available`.
-3. THE `data_scopes` table SHALL include `org_id` and `scope_config`, and SHALL use `scope_type` values `all_company` / `department` / `own` / `assigned_store` / `assigned_product`; the corresponding DML seed values SHALL map legacy `all` 鈫?`all_company` and `assigned` 鈫?`assigned_store`.
+3. THE `data_scopes` table SHALL include `org_id` and `scope_config`, and SHALL use `scope_type` values `all_company` / `department` / `own` / `assigned_store` / `assigned_product`; the corresponding DML seed values SHALL map legacy `all` �?`all_company` and `assigned` �?`assigned_store`.
 4. THE project SHALL NOT introduce duplicate tables for the same concept: it SHALL use `warehouse_locations` (not a new `warehouses`) and `customer_reviews` (not a new `reviews`).
 5. WHERE the actual entities differ from the names listed above, THE migrations SHALL follow the actual entity definitions discovered in the codebase, and any deviation from this requirement SHALL be documented in the design.
 
