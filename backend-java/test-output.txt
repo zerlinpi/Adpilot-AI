@@ -1,0 +1,94 @@
+﻿[INFO] Scanning for projects...
+[INFO] 
+[INFO] --------------------< com.adpilot:adpilot-backend >---------------------
+[INFO] Building adpilot-backend 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ adpilot-backend ---
+[INFO] Copying 3 resources from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.11.0:compile (default-compile) @ adpilot-backend ---
+[INFO] Nothing to compile - all classes are up to date
+[INFO] 
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ adpilot-backend ---
+[INFO] Copying 1 resource from src\test\resources to target\test-classes
+[INFO] 
+[INFO] --- compiler:3.11.0:testCompile (default-testCompile) @ adpilot-backend ---
+[INFO] Changes detected - recompiling the module! :source
+[INFO] Compiling 195 source files with javac [debug release 17] to target\test-classes
+[INFO] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/advertising/operation/FirstTransactionAtomicityPropertyTest.java: E:\AWS\backend-java\src\test\java\com\adpilot\modules\advertising\operation\FirstTransactionAtomicityPropertyTest.java使用或覆盖了已过时的 API。
+[INFO] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/advertising/operation/FirstTransactionAtomicityPropertyTest.java: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
+[INFO] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/tableview/service/impl/TableViewIsolationPropertyTest.java: 某些输入文件使用了未经检查或不安全的操作。
+[INFO] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/tableview/service/impl/TableViewIsolationPropertyTest.java: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/advertising/hosting/DecisionSnapshotPropertyTest.java:[261,27] 对于combine(net.jqwik.api.Arbitrary<java.time.LocalDateTime>,net.jqwik.api.Arbitrary<java.lang.Integer>,net.jqwik.api.Arbitrary<java.util.Map<java.lang.String,java.math.BigDecimal>>,net.jqwik.api.Arbitrary<java.lang.Boolean>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.util.List<java.lang.String>>,net.jqwik.api.Arbitrary<java.util.List<com.adpilot.modules.advertising.hosting.DecisionSnapshot.EffectiveBoundary>>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.math.BigDecimal>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.Boolean>,net.jqwik.api.Arbitrary<java.lang.Boolean>), 找不到合适的方法
+    方法 net.jqwik.api.Combinators.<T1,T2>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>)不适用
+      (无法推断类型变量 T1,T2
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>)不适用
+      (无法推断类型变量 T1,T2,T3
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3,T4>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>)不适用
+      (无法推断类型变量 T1,T2,T3,T4
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>)不适用
+      (无法推断类型变量 T1,T2,T3,T4,T5
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>)不适用
+      (无法推断类型变量 T1,T2,T3,T4,T5,T6
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6,T7>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>,net.jqwik.api.Arbitrary<T7>)不适用
+      (无法推断类型变量 T1,T2,T3,T4,T5,T6,T7
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6,T7,T8>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>,net.jqwik.api.Arbitrary<T7>,net.jqwik.api.Arbitrary<T8>)不适用
+      (无法推断类型变量 T1,T2,T3,T4,T5,T6,T7,T8
+        (实际参数列表和形式参数列表长度不同))
+    方法 net.jqwik.api.Combinators.<T>combine(java.util.List<net.jqwik.api.Arbitrary<T>>)不适用
+      (无法推断类型变量 T
+        (实际参数列表和形式参数列表长度不同))
+[INFO] 1 error
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  03:25 min
+[INFO] Finished at: 2026-06-15T16:05:24+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.11.0:testCompile (default-testCompile) on project adpilot-backend: Compilation failure
+[ERROR] /E:/AWS/backend-java/src/test/java/com/adpilot/modules/advertising/hosting/DecisionSnapshotPropertyTest.java:[261,27] 对于combine(net.jqwik.api.Arbitrary<java.time.LocalDateTime>,net.jqwik.api.Arbitrary<java.lang.Integer>,net.jqwik.api.Arbitrary<java.util.Map<java.lang.String,java.math.BigDecimal>>,net.jqwik.api.Arbitrary<java.lang.Boolean>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.util.List<java.lang.String>>,net.jqwik.api.Arbitrary<java.util.List<com.adpilot.modules.advertising.hosting.DecisionSnapshot.EffectiveBoundary>>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.math.BigDecimal>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.String>,net.jqwik.api.Arbitrary<java.lang.Boolean>,net.jqwik.api.Arbitrary<java.lang.Boolean>), 找不到合适的方法
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>)不适用
+[ERROR]       (无法推断类型变量 T1,T2
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3,T4>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3,T4
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3,T4,T5
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3,T4,T5,T6
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6,T7>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>,net.jqwik.api.Arbitrary<T7>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3,T4,T5,T6,T7
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T1,T2,T3,T4,T5,T6,T7,T8>combine(net.jqwik.api.Arbitrary<T1>,net.jqwik.api.Arbitrary<T2>,net.jqwik.api.Arbitrary<T3>,net.jqwik.api.Arbitrary<T4>,net.jqwik.api.Arbitrary<T5>,net.jqwik.api.Arbitrary<T6>,net.jqwik.api.Arbitrary<T7>,net.jqwik.api.Arbitrary<T8>)不适用
+[ERROR]       (无法推断类型变量 T1,T2,T3,T4,T5,T6,T7,T8
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR]     方法 net.jqwik.api.Combinators.<T>combine(java.util.List<net.jqwik.api.Arbitrary<T>>)不适用
+[ERROR]       (无法推断类型变量 T
+[ERROR]         (实际参数列表和形式参数列表长度不同))
+[ERROR] 
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

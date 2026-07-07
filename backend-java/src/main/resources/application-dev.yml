@@ -1,0 +1,57 @@
+# ============================================================
+# AdPilot AI - Development Profile Configuration
+# ============================================================
+
+spring:
+  # --- MySQL datasource ---
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:adpilot}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8
+    # Local dev credentials are read from environment variables so no real
+    # password is committed. Set DB_USERNAME / DB_PASSWORD for your local MySQL
+    # (defaults below are placeholders for a throwaway local database only).
+    username: ${DB_USERNAME:adpilot}
+    password: ${DB_PASSWORD:adpilot}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  # --- JPA / Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: none    # DB is decoupled; schema imported manually from db/schema.sql
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # --- Redis ---
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  # --- Flyway ---
+  # Disabled: schema is imported manually from db/schema.sql (matches base config).
+  flyway:
+    enabled: false
+
+# ============================================================
+# Logging
+# ============================================================
+logging:
+  level:
+    com.adpilot: DEBUG
+    org.springframework.security: DEBUG
+
+# ============================================================
+# AdPilot application settings
+# ============================================================
+adpilot:
+  crypto:
+    # Secret used to derive the AES key for encrypting third-party platform
+    # credentials at rest. OVERRIDE THIS in production (env var ADPILOT_CRYPTO_SECRET).
+    secret: ${ADPILOT_CRYPTO_SECRET:adpilot-default-dev-secret-change-me-in-prod}
+  feishu:
+    # Feishu app credentials for the internal app integration. Both are read
+    # from environment variables and default to BLANK so no real app id/secret
+    # is committed; set FEISHU_APP_ID / FEISHU_APP_SECRET to enable the
+    # integration (an unconfigured deployment simply has no default Feishu app).
+    app-id: ${FEISHU_APP_ID:}
+    app-secret: ${FEISHU_APP_SECRET:}

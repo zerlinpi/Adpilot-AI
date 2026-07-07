@@ -1,0 +1,32 @@
+# ── Dependencies ────────────────────────────────────────────
+node_modules/
+
+# ── Build output ────────────────────────────────────────────
+dist/
+build/
+target/
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# ── Environment / secrets (never commit real credentials) ────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Database / tooling artifacts ────────────────────────────
+.jqwik-database
+prisma/migrations/
+
+# ── IDE / OS ────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db

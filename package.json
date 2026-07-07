@@ -1,0 +1,16 @@
+{
+  "name": "adpilot-ai",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
+    "dev:frontend": "cd frontend && pnpm dev",
+    "dev:backend": "cd backend-java && .\\mvnw.cmd spring-boot:run",
+    "install:all": "cd frontend && pnpm install",
+    "build": "cd frontend && pnpm build",
+    "backend:test": "cd backend-java && .\\mvnw.cmd test"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

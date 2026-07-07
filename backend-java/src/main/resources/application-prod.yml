@@ -1,0 +1,70 @@
+# ============================================================
+# AdPilot AI - Production Profile Configuration
+# ============================================================
+
+# --- Server ---
+# Keep the production port aligned with the base configuration.
+server:
+  port: 8090
+
+spring:
+  # --- MySQL datasource ---
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:adpilot}?useSSL=true&requireSSL=true&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+
+  # --- JPA / Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: none    # DB is decoupled; schema imported manually from db/schema.sql
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+
+  # --- Redis ---
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  # --- Flyway ---
+  # Disabled: schema is imported manually from db/schema.sql (matches base config).
+  flyway:
+    enabled: false
+
+# ============================================================
+# Logging
+# ============================================================
+logging:
+  level:
+    com.adpilot: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+
+# ============================================================
+# AdPilot Custom Properties
+# ============================================================
+adpilot:
+  # JWT authentication settings.
+  # IMPORTANT: production must provide JWT_SECRET explicitly. Startup should
+  # fail fast instead of silently using a development signing key.
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:7200000}
+
+  security:
+    session:
+      revocation-fail-closed: ${SESSION_REVOCATION_FAIL_CLOSED:true}
+
+  # CORS policy - restrict to known production frontend origins.
+  # Read by WebConfig via the adpilot.cors.allowed-origins property.
+  cors:
+    allowed-origins: ${CORS_ORIGINS:https://your-domain.example}

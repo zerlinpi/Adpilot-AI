@@ -1,0 +1,353 @@
+# ============================================================
+# AdPilot AI - Main Application Configuration
+# ============================================================
+# This is the shared configuration loaded for all profiles.
+# Environment-specific overrides are defined in application-{profile}.yml
+# (e.g., application-dev.yml, application-prod.yml).
+# ============================================================
+
+server:
+  port: 8090
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: adpilot-backend
+
+  # Default active profile; override via environment variable SPRING_PROFILES_ACTIVE
+  profiles:
+    active: dev
+
+  # --- Jackson JSON serialization ---
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+  # --- Flyway database migration ---
+  # Disabled: the database is decoupled from the app. The schema is imported
+  # manually from db/schema.sql (the single source of truth); the app never
+  # runs migrations or auto-creates schema on startup.
+  flyway:
+    enabled: false
+
+  # --- SQL init: never auto-run any schema.sql / data.sql on startup ---
+  sql:
+    init:
+      mode: never
+
+  # --- JPA / Hibernate ---
+  jpa:
+    hibernate:
+      ddl-auto: none    # Never auto-modify schema; DDL is owned by db/schema.sql
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.MySQLDialect
+        # Store/read java.util.UUID entity fields as 36-char strings (CHAR(36)),
+        # matching the Flyway schema. Without this, Hibernate maps UUID to BINARY
+        # and reads dashed-string ids back as garbage (e.g. 30303030-...).
+        type:
+          preferred_uuid_jdbc_type: CHAR
+
+# ============================================================
+# MyBatis-Plus Configuration
+# ============================================================
+# Used alongside JPA for complex queries and batch operations.
+# Mapper XML files are located under classpath:mapper/**/*.xml
+# ============================================================
+mybatis-plus:
+  mapper-locations: classpath:mapper/**/*.xml
+  # Auto-register custom type handlers (e.g. UUID <-> CHAR(36)) in this package.
+  type-handlers-package: com.adpilot.common.config
+  configuration:
+    # Automatically map database snake_case columns to Java camelCase fields
+    map-underscore-to-camel-case: true
+    # Enable SQL logging during development (disable in production)
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      # ids are java.util.UUID; we populate them via UuidMetaObjectHandler on
+      # insert (assign_uuid would generate a 32-char String and fail to set on
+      # a UUID field). INPUT means MyBatis-Plus does not auto-generate the id.
+      id-type: input
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# ============================================================
+# AdPilot Custom Properties
+# ============================================================
+adpilot:
+  # JWT authentication settings.
+  # Development keeps a local default so the app can start without extra setup.
+  # Production overrides this with a required JWT_SECRET in application-prod.yml.
+  jwt:
+    secret: ${JWT_SECRET:adpilot-dev-only-jwt-secret-key-change-before-production}
+    expiration: ${JWT_EXPIRATION:7200000}      # Token validity: 2 hours (in milliseconds)
+
+  # CORS policy - restrict to known frontend origins
+  cors:
+    allowed-origins: ${CORS_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+  # Account security: login-failure lockout and password strength policy (Req 11.1)
+  security:
+    lockout:
+      # Consecutive failed login attempts that trigger a lockout (per account)
+      max-failed-attempts: 5
+      # How long an account stays locked once the limit is reached (minutes)
+      duration-minutes: 15
+    # IP-based login throttle (audit L3). Per-account lockout does not stop an
+    # attacker spreading guesses across many accounts from one IP; this counts
+    # failed login attempts per client IP within a rolling window and blocks
+    # further attempts (HTTP 429) once the threshold is exceeded. Successful
+    # logins reset the counter. Fails OPEN on backend errors so a Redis outage
+    # never locks out legitimate users, and can be toggled off entirely.
+    login-rate-limit:
+      enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
+      # Failed attempts per IP within the window that trigger throttling.
+      max-attempts: ${LOGIN_RATE_LIMIT_MAX_ATTEMPTS:20}
+      # Rolling window length in seconds over which failures are counted.
+      window-seconds: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:300}
+    password:
+      min-length: 8
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-digit: true
+      require-special: false
+    # Session control & sensitive-action re-confirmation (Req 11.2)
+    reconfirm:
+      # How long an identity re-confirmation stays valid for sensitive actions (seconds)
+      window-seconds: 300
+    session:
+      # Development keeps existing sessions available if Redis is temporarily
+      # down. Production enables fail-closed in application-prod.yml.
+      revocation-fail-closed: ${SESSION_REVOCATION_FAIL_CLOSED:false}
+
+  # Near-static reference data caching (audit L2 + M7). The marketplaces table
+  # changes very rarely, so MarketplaceReferenceService loads it once and serves
+  # currency/timezone lookups from an in-memory snapshot reloaded only when older
+  # than this TTL, instead of a full-table scan per request / per sync tick.
+  reference:
+    marketplace-cache-ttl-seconds: ${ADPILOT_REFERENCE_MARKETPLACE_CACHE_TTL_SECONDS:300}
+
+  # Advertising Operation model settings (advertising-workspace-rework).
+  advertising:    # Inbound platform write-back callback authenticity (Req 55.5). The
+    # CallbackController verifies HMAC-SHA256(secret, timestamp + "." + rawBody)
+    # over every inbound callback BEFORE mutating any Operation state. Left BLANK
+    # by default so an unconfigured deployment FAILS CLOSED (rejects all
+    # callbacks) rather than trusting unsigned server-to-server traffic. Set the
+    # shared secret agreed with the platform connector before enabling write-back.
+    callback:
+      signing-secret: ${ADPILOT_ADVERTISING_CALLBACK_SIGNING_SECRET:}
+
+    # Write-back failure alerting (Req 51.7) — raise an alert when, over the
+    # rolling window with at least `min-sample` attempts, the failure rate is at
+    # or above `failure-rate-threshold`, OR when `consecutive-failure-threshold`
+    # consecutive write-back failures occur for one Store + Write_Connector. All
+    # values are configurable backend values (Req 51.11).
+    writeback-alert:
+      # Rolling window (minutes) over which the failure rate is computed.
+      window-minutes: ${ADPILOT_WRITEBACK_ALERT_WINDOW_MINUTES:15}
+      # Minimum windowed attempts before the failure-rate rule can fire.
+      min-sample: ${ADPILOT_WRITEBACK_ALERT_MIN_SAMPLE:10}
+      # Failure rate in [0,1] at/above which the rate rule fires (0.25 = 25%).
+      failure-rate-threshold: ${ADPILOT_WRITEBACK_ALERT_FAILURE_RATE:0.25}
+      # Consecutive failures at/above which the consecutive rule fires.
+      consecutive-failure-threshold: ${ADPILOT_WRITEBACK_ALERT_CONSECUTIVE:5}
+      # Upper bound on retained attempts per Store + Write_Connector (memory cap).
+      max-tracked-attempts: ${ADPILOT_WRITEBACK_ALERT_MAX_TRACKED:1000}
+
+  # Recommendation engine settings (advertising-workspace-rework, Req 18).
+  recommendation:
+    # System default target ACoS used when neither a Goal target ACoS nor a
+    # product target_acos is configured for a Campaign under evaluation
+    # (Req 18.6c). Expressed as a decimal ratio (0.25 = 25%) and configurable
+    # rather than hardcoded (Req 18.7).
+    default-target-acos: ${ADPILOT_RECOMMENDATION_DEFAULT_TARGET_ACOS:0.25}
+
+  # Feishu / Lark integration settings.
+  feishu:
+    # SSRF allow-list for custom-bot webhook URLs (comma-separated hosts, exact
+    # case-insensitive match). The server POSTs to the stored webhook URL, so a
+    # feishu:manage user could otherwise aim it at internal services or cloud
+    # metadata. Only https URLs on these hosts are accepted (private/loopback/
+    # link-local/metadata targets are always rejected). Add self-hosted Lark
+    # hosts here without code changes; defaults to the official public hosts.
+    webhook-allowed-hosts: ${ADPILOT_FEISHU_WEBHOOK_ALLOWED_HOSTS:open.feishu.cn,open.larksuite.com}
+
+  # Pluggable AI client (AiClient) — OpenAI-compatible Chat Completions.
+  # These bound how long/how many blocking provider calls can occupy request
+  # threads, so a slow or unreachable provider fails fast (callers fall back to
+  # templates) instead of exhausting the Tomcat thread pool under load.
+  ai:
+    # Socket connect timeout for a provider call (seconds).
+    connect-timeout-seconds: ${ADPILOT_AI_CONNECT_TIMEOUT_SECONDS:5}
+    # Read timeout for a provider call (seconds); tuned for interactive use.
+    read-timeout-seconds: ${ADPILOT_AI_READ_TIMEOUT_SECONDS:30}
+    # Max simultaneous in-flight provider calls (caps blocked request threads).
+    max-concurrent-calls: ${ADPILOT_AI_MAX_CONCURRENT_CALLS:8}
+    # Bounded wait to acquire an in-flight slot before failing fast (ms).
+    acquire-timeout-millis: ${ADPILOT_AI_ACQUIRE_TIMEOUT_MILLIS:2000}
+
+  # Shared outbound HTTP client timeouts (HttpClientFactory). Every outbound
+  # RestClient in the app is built via HttpClientFactory so a slow or hung
+  # third-party dependency can never pin the calling thread indefinitely. No
+  # timeout is ever left infinite.
+  http:
+    # Socket connect timeout for any outbound call (seconds).
+    connect-timeout-seconds: ${ADPILOT_HTTP_CONNECT_TIMEOUT_SECONDS:10}
+    # Default read/response timeout for an outbound call (seconds).
+    read-timeout-seconds: ${ADPILOT_HTTP_READ_TIMEOUT_SECONDS:30}
+    # Longer (still bounded) read timeout for calls that legitimately need more
+    # time — e.g. Amazon report download/poll, long-running independent-site publish.
+    long-read-timeout-seconds: ${ADPILOT_HTTP_LONG_READ_TIMEOUT_SECONDS:60}
+
+  # API-sync job runner (SyncJobRunnerImpl). The runner dispatches sync pipelines
+  # off the request thread onto a bounded thread pool (reliability fix M2). The
+  # pool is explicitly bounded — a bounded queue plus a CallerRuns rejection
+  # policy — so dispatch can never grow an unbounded backlog; under saturation the
+  # submitting request thread runs the job inline rather than dropping it.
+  apisync:
+    runner:
+      # Worker threads that execute sync pipelines.
+      pool-size: ${ADPILOT_APISYNC_RUNNER_POOL_SIZE:4}
+      # Bounded queue capacity for pending sync jobs before CallerRuns kicks in.
+      queue-capacity: ${ADPILOT_APISYNC_RUNNER_QUEUE_CAPACITY:100}
+
+  # @Scheduled job thread pool (SchedulerConfig). Without a pool every @Scheduled
+  # job shares Spring's single scheduler thread, so a slow job blocks all others
+  # (head-of-line blocking). A bounded pool lets independent jobs run in parallel.
+  scheduling:
+    # Number of threads in the scheduled-task pool.
+    pool-size: ${ADPILOT_SCHEDULING_POOL_SIZE:8}
+
+  # Retention sweeper (RetentionCleanupJob, reliability fix M4): a daily scheduled
+  # job that deletes aged rows from high-write log/ledger tables in bounded batches,
+  # keyed on each table's created_at column. Two knobs — operational vs audit — so
+  # compliance-sensitive tables (audit_logs, login_logs) keep a longer default.
+  # A value <= 0 means "keep forever" and skips that table entirely.
+  retention:
+    # Days to keep operational logs: report_sync_errors, notification_delivery_log,
+    # ai_model_call_logs, feishu_message_logs.
+    operational-log-days: ${ADPILOT_RETENTION_OPERATIONAL_LOG_DAYS:90}
+    # Days to keep audit/compliance logs: audit_logs, login_logs (longer default).
+    audit-log-days: ${ADPILOT_RETENTION_AUDIT_LOG_DAYS:365}
+    # Max rows deleted per DELETE statement, looped until the backlog is drained,
+    # so a large backlog never locks a table with one huge statement.
+    batch-size: ${ADPILOT_RETENTION_BATCH_SIZE:1000}
+    # Cron for the daily sweep (03:30 — after the optimization_runs cleanup at 03:00).
+    cleanup-cron: ${ADPILOT_RETENTION_CLEANUP_CRON:0 30 3 * * ?}
+
+  # Circuit breaker for scheduled/worker external-call paths (reliability fix H3).
+  # Stops a known-down external dependency (Amazon Ads token/report/status/verify,
+  # Feishu) from being hammered every scheduler tick. Fail-open by design: if the
+  # breaker itself errors, calls are permitted. Toggle off to disable entirely.
+  resilience:
+    circuit:
+      # Master switch. false => allow() always true, record*() are no-ops.
+      enabled: ${ADPILOT_RESILIENCE_CIRCUIT_ENABLED:true}
+      # Consecutive failures on a key that trip the breaker CLOSED -> OPEN.
+      failure-threshold: ${ADPILOT_RESILIENCE_CIRCUIT_FAILURE_THRESHOLD:5}
+      # How long a key stays OPEN before a single HALF_OPEN probe is permitted (seconds).
+      cooldown-seconds: ${ADPILOT_RESILIENCE_CIRCUIT_COOLDOWN_SECONDS:30}
+
+  # Operation status poller / timeout sweeper (advertising-workspace-rework,
+  # Req 4.4/4.9/4.10): scheduled loop that polls the platform for in-flight
+  # platform_mutation Operations and resolves cancel_requested / expired /
+  # reconciliation_required Operations via an actual platform query.
+  operation:
+    # Fixed delay between poll ticks (ms). Default 60 seconds.
+    poll-ms: ${ADPILOT_OPERATION_POLL_MS:60000}
+    # In-flight timeout before a submitted/amazon-processing Operation is swept to
+    # expired (minutes, Req 4.4). Configurable rather than hardcoded.
+    timeout-minutes: ${ADPILOT_OPERATION_TIMEOUT_MINUTES:15}
+
+  # AI Hosting optimizer (Req 21.2): scheduled loop that moves hosted-campaign
+  # bids toward their Target_ACoS within the store's automation-policy bounds.
+  hosting:
+    # Fixed delay between optimization ticks (ms). Default 5 minutes.
+    optimize-ms: 300000
+    # Trailing window used to compute a campaign's recent ACoS (days).
+    lookback-days: 14
+    # Absolute bid floor / ceiling the clamp never crosses (System-default Safety_Boundary).
+    min-bid: 0.02
+    max-bid: 1000
+    # Executable-hosting phase (Req 54): V1 = bid only, V2 = + budget,
+    # V3 = + keyword/negative. Gates which adjustment types the optimizer emits
+    # and the UI presents as executable. Default V1 (current optimizer reach).
+    phase: ${ADPILOT_HOSTING_PHASE:V1}
+    # Global pause switch (Req 22.9): when true, the optimizer generates no new
+    # hosting Operations; awaiting_approval hosting Operations are cancelled on
+    # engagement and in-flight ones are left to resolve.
+    global-pause: ${ADPILOT_HOSTING_GLOBAL_PAUSE:false}
+    # Decision TTL (Req 33.1): how long an AI decision remains valid before
+    # pre-submission revalidation rejects it as expired (hours). Default 4 hours.
+    decision-ttl-hours: ${ADPILOT_HOSTING_DECISION_TTL_HOURS:4}
+    governance:
+      # Phase-11 governance capabilities are explicit feature switches. They
+      # stay disabled until their backing persistence, alerting, and UI controls
+      # are implemented end-to-end.
+      canary-enabled: ${ADPILOT_HOSTING_CANARY_ENABLED:false}
+      slo-monitor-enabled: ${ADPILOT_HOSTING_SLO_MONITOR_ENABLED:false}
+      drift-monitor-enabled: ${ADPILOT_HOSTING_DRIFT_MONITOR_ENABLED:false}
+
+  # ============================================================
+  # Amazon Ads OAuth (Login with Amazon) store-connection flow
+  # ============================================================
+  # Credentials for the "连接亚马逊店铺" wizard. Register an Amazon Ads API
+  # application at https://advertising.amazon.com/API/docs and create a
+  # Login-with-Amazon (LWA) security profile to obtain client-id / client-secret.
+  #
+  # IMPORTANT — fill these three before the wizard can be used (left BLANK by
+  # default so the app starts cleanly and every endpoint fails gracefully with a
+  # clear 4xx instead of a 500/NPE when unconfigured):
+  #   * client-id     : LWA client id (amzn1.application-oa2-client....)
+  #   * client-secret : LWA client secret (SECRET — encrypted/never logged)
+  #   * redirect-uri  : the Allowed Return URL registered in the LWA app. It MUST
+  #                     match exactly here and in the Amazon app, and must be the
+  #                     frontend landing page that reads ?code&state and calls the
+  #                     /amazon-ads/callback API (e.g. https://your-app/amazon-ads/callback).
+  #
+  # All values are overridable by environment variables, e.g.
+  #   ADPILOT_AMAZON_ADS_CLIENT_ID, ADPILOT_AMAZON_ADS_CLIENT_SECRET,
+  #   ADPILOT_AMAZON_ADS_REDIRECT_URI, ADPILOT_AMAZON_ADS_SCOPE,
+  #   ADPILOT_AMAZON_ADS_NA_AUTHORIZE_HOST, ... etc.
+  amazon-ads:
+    # SECURITY (Req 15.1/15.2): no literal client-id/secret is committed. Both are
+    # sourced from environment variables and default to BLANK when unset, so the
+    # app starts cleanly and any operation requiring credentials fails with a clear
+    # 4xx ("credentials not configured") instead of a 500/NPE (Req 15.4).
+    client-id: ${ADPILOT_AMAZON_ADS_CLIENT_ID:}
+    client-secret: ${ADPILOT_AMAZON_ADS_CLIENT_SECRET:}
+    redirect-uri: ${ADPILOT_AMAZON_ADS_REDIRECT_URI:http://localhost:8080/api-connections}
+    # OAuth scope requested on the authorize URL (ad-account management).
+    scope: ${ADPILOT_AMAZON_ADS_SCOPE:advertising::campaign_management}
+    # How long a generated CSRF state stays valid (seconds).
+    state-ttl-seconds: ${ADPILOT_AMAZON_ADS_STATE_TTL_SECONDS:900}
+    # Per-region LWA authorize host, token endpoint, and Ads API host.
+    regions:
+      na:
+        authorize-host: ${ADPILOT_AMAZON_ADS_NA_AUTHORIZE_HOST:https://www.amazon.com}
+        token-url: ${ADPILOT_AMAZON_ADS_NA_TOKEN_URL:https://api.amazon.com/auth/o2/token}
+        api-host: ${ADPILOT_AMAZON_ADS_NA_API_HOST:https://advertising-api.amazon.com}
+      eu:
+        authorize-host: ${ADPILOT_AMAZON_ADS_EU_AUTHORIZE_HOST:https://eu.account.amazon.com}
+        token-url: ${ADPILOT_AMAZON_ADS_EU_TOKEN_URL:https://api.amazon.co.uk/auth/o2/token}
+        api-host: ${ADPILOT_AMAZON_ADS_EU_API_HOST:https://advertising-api-eu.amazon.com}
+      fe:
+        authorize-host: ${ADPILOT_AMAZON_ADS_FE_AUTHORIZE_HOST:https://apac.account.amazon.com}
+        token-url: ${ADPILOT_AMAZON_ADS_FE_TOKEN_URL:https://api.amazon.co.jp/auth/o2/token}
+        api-host: ${ADPILOT_AMAZON_ADS_FE_API_HOST:https://advertising-api-fe.amazon.com}
+
+# ============================================================
+# API Documentation (SpringDoc / Swagger UI)
+# ============================================================
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
