@@ -59,11 +59,11 @@ const CAMPAIGN_VIEW_FIELDS: RecordField[] = [
   { key: 'sales', label: '销售额', format: (v) => (v != null ? `$${v}` : '—') },
   { key: 'orders', label: '订单', format: (v) => (v != null ? String(v) : '—') },
   { key: 'clicks', label: '点击', format: (v) => (v != null ? String(v) : '—') },
-  { key: 'ctr', label: 'CTR', format: (v) => (v != null ? `${v}%` : '—') },
-  { key: 'conversionRate', label: 'CVR', format: (v) => (v != null ? `${v}%` : '—') },
+  { key: 'ctr', label: 'CTR', format: (v) => (v != null ? `${Number(v).toFixed(2)}%` : '—') },
+  { key: 'conversionRate', label: 'CVR', format: (v) => (v != null ? `${Number(v).toFixed(2)}%` : '—') },
   { key: 'avgCpc', label: 'CPC', format: (v) => (v != null ? `$${v}` : '—') },
-  { key: 'acos', label: 'ACoS', format: (v) => (v != null ? `${v}%` : '—') },
-  { key: 'roas', label: 'ROAS', format: (v) => (v != null ? `${v}x` : '—') },
+  { key: 'acos', label: 'ACoS', format: (v) => (v != null ? `${Number(v).toFixed(2)}%` : '—') },
+  { key: 'roas', label: 'ROAS', format: (v) => (v != null ? `${Number(v).toFixed(2)}x` : '—') },
 ];
 
 const CAMPAIGN_BUDGET_FIELDS: RecordField[] = [
@@ -116,9 +116,9 @@ function finiteMetric(value: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function metricCurrency(value: unknown, currency = 'USD'): string {
+function metricCurrency(value: unknown): string {
   const n = finiteMetric(value);
-  return n === undefined ? '—' : formatCurrency(n, currency);
+  return n === undefined ? '—' : formatCurrency(n);
 }
 
 function metricPercent(value: unknown): string {
@@ -143,8 +143,6 @@ function campaignRoas(campaign: CampaignVo): number | undefined {
 }
 
 function campaignCtr(campaign: CampaignVo): number | undefined {
-  const direct = finiteMetric(campaign.ctr);
-  if (direct !== undefined) return direct;
   const clicks = finiteMetric(campaign.clicks) ?? 0;
   const impressions = finiteMetric(campaign.impressions) ?? 0;
   return impressions > 0 ? (clicks / impressions) * 100 : undefined;
@@ -159,7 +157,7 @@ function campaignCvr(campaign: CampaignVo): number | undefined {
 }
 
 function campaignCpc(campaign: CampaignVo): number | undefined {
-  const direct = finiteMetric(campaign.avgCpc) ?? finiteMetric(campaign.cpc);
+  const direct = finiteMetric(campaign.avgCpc);
   if (direct !== undefined) return direct;
   const spend = finiteMetric(campaign.spend) ?? 0;
   const clicks = finiteMetric(campaign.clicks) ?? 0;
@@ -546,7 +544,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   const filtered = useMemo(() => {
     if (!searchQuery) return campaigns;
     const q = searchQuery.toLowerCase();
-    return campaigns.filter((c) => String(c.name ?? c.campaignName ?? '').toLowerCase().includes(q));
+    return campaigns.filter((c) => c.name.toLowerCase().includes(q));
   }, [campaigns, searchQuery]);
 
   const statusOptions = useMemo(() => getStatusFilterOptions('objectStatus'), []);
@@ -698,46 +696,46 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
             </span>
           )}
           <span className="text-sm font-medium text-slate-900 truncate max-w-[220px]" title={c.name}>
-            {c.name || c.campaignName || '未命名广告活动'}
+            {c.name}
           </span>
         </div>
       ),
-      exportValue: (c) => c.name || c.campaignName || '',
+      exportValue: (c) => c.name,
     },
     { key: 'status', header: '状态', width: 96, render: (c) => <StatusBadge status={c.status} />, exportValue: (c) => c.status },
     {
       key: 'budget',
       header: '日预算',
       width: 104,
-      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.budget, c.currency || 'USD')}</span>,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.budget)}</span>,
       exportValue: (c) => c.budget,
     },
     {
       key: 'spend',
       header: 'Spend',
       width: 104,
-      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.spend, c.currency || 'USD')}</span>,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.spend)}</span>,
       exportValue: (c) => c.spend,
     },
     {
       key: 'sales',
       header: 'Sales',
       width: 104,
-      render: (c) => <span className="tabular-nums font-medium text-slate-900">{metricCurrency(c.sales, c.currency || 'USD')}</span>,
+      render: (c) => <span className="tabular-nums font-medium text-slate-900">{metricCurrency(c.sales)}</span>,
       exportValue: (c) => c.sales,
     },
     {
       key: 'orders',
       header: 'Orders',
       width: 82,
-      render: (c) => <span className="tabular-nums text-slate-700">{finiteMetric(c.orders) === undefined ? '—' : formatNumber(Number(c.orders))}</span>,
+      render: (c) => <span className="tabular-nums text-slate-700">{formatNumber(c.orders)}</span>,
       exportValue: (c) => c.orders,
     },
     {
       key: 'clicks',
       header: 'Clicks',
       width: 82,
-      render: (c) => <span className="tabular-nums text-slate-700">{finiteMetric(c.clicks) === undefined ? '—' : formatNumber(Number(c.clicks))}</span>,
+      render: (c) => <span className="tabular-nums text-slate-700">{formatNumber(c.clicks)}</span>,
       exportValue: (c) => c.clicks,
     },
     {
@@ -758,7 +756,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
       key: 'cpc',
       header: 'CPC',
       width: 88,
-      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(campaignCpc(c), c.currency || 'USD')}</span>,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(campaignCpc(c))}</span>,
       exportValue: (c) => campaignCpc(c),
     },
     {
@@ -942,7 +940,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
         mode="view"
         title="广告活动详情"
         fields={CAMPAIGN_VIEW_FIELDS}
-        record={detailCampaign}
+        record={detailCampaign ? { ...detailCampaign, ctr: campaignCtr(detailCampaign) } : null}
         onClose={() => setDetailCampaign(null)}
       />
       <RecordModal
