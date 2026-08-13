@@ -1,12 +1,7 @@
 // 广告活动 (Campaigns) tab — extracted from CampaignsPage and recomposed on the
-// reusable table building blocks (Req 1.2, 1.3, 1.4, 1.9):
-//   - FilterToolbar   — search + smart/type/status/portfolio selectors
-//   - SharedDataTable  — the campaign grid (loading/empty/error/refresh)
-//   - BulkActionBar    — bulk enable / pause / delete (via SharedDataTable)
-//
-// Tab-specific behavior preserved from the original inline implementation:
-// the data-trend panel, create-campaign modal, per-row enable/pause toggle and
-// row action menu, and the view/edit-budget record modals.
+// reusable table building blocks. This view keeps campaign operations dense:
+// high-signal advertising metrics stay in the primary table while secondary
+// diagnostics remain available through the existing column manager.
 
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import {
@@ -16,9 +11,6 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { notify } from '../../../lib/toast';
 
-// The recharts-based trend chart is lazy-loaded so the heavy charts bundle is
-// only fetched when the trend panel actually renders one (keeping it out of the
-// campaigns workspace page chunk).
 const CampaignTrendChart = lazy(() => import('./CampaignTrendChart'));
 
 import {
@@ -62,11 +54,16 @@ const CAMPAIGN_VIEW_FIELDS: RecordField[] = [
   { key: 'name', label: '广告活动' },
   { key: 'status', label: '状态' },
   { key: 'campaignType', label: '类型' },
-  { key: 'dailyBudget', label: '日预算', format: (v) => (v != null ? `$${v}` : '—') },
+  { key: 'budget', label: '日预算', format: (v) => (v != null ? `$${v}` : '—') },
   { key: 'spend', label: '花费', format: (v) => (v != null ? `$${v}` : '—') },
   { key: 'sales', label: '销售额', format: (v) => (v != null ? `$${v}` : '—') },
-  { key: 'acos', label: 'ACoS', format: (v) => (v ? `${v}%` : '—') },
-  { key: 'roas', label: 'ROAS', format: (v) => (v ? `${v}x` : '—') },
+  { key: 'orders', label: '订单', format: (v) => (v != null ? String(v) : '—') },
+  { key: 'clicks', label: '点击', format: (v) => (v != null ? String(v) : '—') },
+  { key: 'ctr', label: 'CTR', format: (v) => (v != null ? `${v}%` : '—') },
+  { key: 'conversionRate', label: 'CVR', format: (v) => (v != null ? `${v}%` : '—') },
+  { key: 'avgCpc', label: 'CPC', format: (v) => (v != null ? `$${v}` : '—') },
+  { key: 'acos', label: 'ACoS', format: (v) => (v != null ? `${v}%` : '—') },
+  { key: 'roas', label: 'ROAS', format: (v) => (v != null ? `${v}x` : '—') },
 ];
 
 const CAMPAIGN_BUDGET_FIELDS: RecordField[] = [
@@ -74,21 +71,31 @@ const CAMPAIGN_BUDGET_FIELDS: RecordField[] = [
   { key: 'dailyBudget', label: '日预算 ($)', type: 'number' },
 ];
 
-// Human-readable labels for the bulk operations, used in the confirmation dialog.
 const BULK_OP_LABEL: Record<'enable' | 'pause' | 'delete', string> = {
   enable: '启用',
   pause: '暂停',
   delete: '删除',
 };
 
-/** Stable identity for the campaigns table's saved views + column config. */
 const CAMPAIGNS_TABLE_KEY = 'campaigns.campaigns';
 
 /**
- * Decode the persisted column-config JSON string into the order/hidden shape
- * SharedDataTable consumes. Returns null when missing or unreadable so a corrupt
- * record can never crash the tab (the table simply falls back to defaults).
+ * Primary operator view stays intentionally narrow. Secondary performance and
+ * hosting metadata can be enabled at any time through the existing column
+ * manager and will then persist through the existing column-config endpoint.
  */
+const DEFAULT_HIDDEN_COLUMNS = [
+  'clicks',
+  'ctr',
+  'cvr',
+  'cpc',
+  'store',
+  'hostingGoal',
+  'targetAcos',
+  'aiManaged',
+  'targetingType',
+];
+
 function parseColumnConfig(
   config?: string | null,
 ): { order?: string[]; hidden?: string[] } | null {
@@ -104,7 +111,61 @@ function parseColumnConfig(
   }
 }
 
-// ─── Trend metric tiles + dual-axis chart (Req 19.2) ──────────────────
+function finiteMetric(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function metricCurrency(value: unknown, currency = 'USD'): string {
+  const n = finiteMetric(value);
+  return n === undefined ? '—' : formatCurrency(n, currency);
+}
+
+function metricPercent(value: unknown): string {
+  const n = finiteMetric(value);
+  return n === undefined ? '—' : formatPercent(n, 2);
+}
+
+function campaignAcos(campaign: CampaignVo): number | undefined {
+  const direct = finiteMetric(campaign.acos);
+  if (direct !== undefined) return direct;
+  const spend = finiteMetric(campaign.spend) ?? 0;
+  const sales = finiteMetric(campaign.sales) ?? 0;
+  return sales > 0 ? (spend / sales) * 100 : undefined;
+}
+
+function campaignRoas(campaign: CampaignVo): number | undefined {
+  const direct = finiteMetric(campaign.roas);
+  if (direct !== undefined) return direct;
+  const spend = finiteMetric(campaign.spend) ?? 0;
+  const sales = finiteMetric(campaign.sales) ?? 0;
+  return spend > 0 ? sales / spend : undefined;
+}
+
+function campaignCtr(campaign: CampaignVo): number | undefined {
+  const direct = finiteMetric(campaign.ctr);
+  if (direct !== undefined) return direct;
+  const clicks = finiteMetric(campaign.clicks) ?? 0;
+  const impressions = finiteMetric(campaign.impressions) ?? 0;
+  return impressions > 0 ? (clicks / impressions) * 100 : undefined;
+}
+
+function campaignCvr(campaign: CampaignVo): number | undefined {
+  const direct = finiteMetric(campaign.conversionRate);
+  if (direct !== undefined) return direct;
+  const orders = finiteMetric(campaign.orders) ?? 0;
+  const clicks = finiteMetric(campaign.clicks) ?? 0;
+  return clicks > 0 ? (orders / clicks) * 100 : undefined;
+}
+
+function campaignCpc(campaign: CampaignVo): number | undefined {
+  const direct = finiteMetric(campaign.avgCpc) ?? finiteMetric(campaign.cpc);
+  if (direct !== undefined) return direct;
+  const spend = finiteMetric(campaign.spend) ?? 0;
+  const clicks = finiteMetric(campaign.clicks) ?? 0;
+  return clicks > 0 ? spend / clicks : undefined;
+}
+
 interface TrendMetric {
   key: string;
   label: string;
@@ -219,7 +280,6 @@ function TrendPanel({
   );
 }
 
-// ─── Create-campaign modal (Req 19.6) ─────────────────────────────────
 function CreateCampaignModal({
   storeId, portfolios, onClose, onCreated,
 }: {
@@ -375,19 +435,12 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   const [detailCampaign, setDetailCampaign] = useState<CampaignVo | null>(null);
   const [budgetCampaign, setBudgetCampaign] = useState<CampaignVo | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  // Pending bulk operation awaiting user confirmation (Req: confirm before
-  // enable/pause/delete, especially delete). Null when no dialog is open.
   const [pendingBulk, setPendingBulk] = useState<{ operation: 'enable' | 'pause' | 'delete'; ids: string[] } | null>(null);
 
-  // Filters (Req 1.3 / 19.4): the smart/type/status/portfolio selectors and the
-  // free-text search are managed through the FilterToolbar's FilterState; the
-  // parent-ASIN and target-ACOS range remain dedicated inputs.
   const [filterState, setFilterState] = useState<FilterState>(() => emptyFilterState());
   const [parentAsin, setParentAsin] = useState('');
   const [targetAcosMin, setTargetAcosMin] = useState('');
   const [targetAcosMax, setTargetAcosMax] = useState('');
-  // Active sort, restored when a Saved_View is applied (Req 2.14, 33.x). null =
-  // the server's default order.
   const [sort, setSort] = useState<SortState | null>(null);
 
   const ts = filterState.typeSelections;
@@ -402,9 +455,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     [stores, storeId],
   );
 
-  // ── Reads through the data-fetching layer (Req 1.5–1.8, 3.x) ────────
-  // The server-side filter params are part of the query key, so changing a
-  // filter re-keys the read and fetches the matching set (Req 3.8).
   const queryParams = useMemo(
     () => ({
       adType: adType !== 'all' ? adType : undefined,
@@ -446,11 +496,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   );
   const portfolios = portfoliosQuery.data ?? [];
 
-  // ── Column configuration persistence (Req 2.12) ───────────────────────
-  // Per-user, store-independent. Load the saved column order/visibility for
-  // this table on mount and feed it to SharedDataTable as the initial config;
-  // persist changes back through the column-config endpoint so show/hide/order
-  // survives a refresh.
   const columnConfigQuery = useApiQuery(
     qk.columnConfig(CAMPAIGNS_TABLE_KEY),
     () => fetchColumnConfig(CAMPAIGNS_TABLE_KEY),
@@ -477,9 +522,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     [saveColumnConfigMutation],
   );
 
-  // ── Saved view application (Req 2.14) ──────────────────────────────────
-  // SharedDataTable restores the column configuration itself; the host restores
-  // filters (into filterState) and sort so the matching slice is re-requested.
   const handleApplySavedView = useCallback(
     (config: SavedViewConfig) => {
       if (config.filters) setFilterState(config.filters);
@@ -491,8 +533,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   const loadCampaigns = useCallback(() => campaignsQuery.refetch(), [campaignsQuery]);
   const loadTrend = useCallback(() => trendQuery.refetch(), [trendQuery]);
 
-  // On a successful write, refresh the affected cached campaign reads (Req 3.3).
-  // A key prefix of `['campaigns', storeId]` matches every filtered variant.
   const invalidateCampaigns = useCallback(
     () => queryClient.invalidateQueries({ queryKey: ['campaigns', storeId ?? undefined] }),
     [queryClient, storeId],
@@ -503,19 +543,14 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     else notify.error(t.text);
   }
 
-  // Client-side name search on top of the server-side filtered set.
   const filtered = useMemo(() => {
     if (!searchQuery) return campaigns;
     const q = searchQuery.toLowerCase();
-    return campaigns.filter((c) => c.name.toLowerCase().includes(q));
+    return campaigns.filter((c) => String(c.name ?? c.campaignName ?? '').toLowerCase().includes(q));
   }, [campaigns, searchQuery]);
 
-  // Status filter options come from a FIXED enumeration (Req 35.1, 35.2, 35.3),
-  // not derived from the loaded rows: every Object_Status value is always
-  // offered even when no loaded campaign currently has that status.
   const statusOptions = useMemo(() => getStatusFilterOptions('objectStatus'), []);
 
-  // ── Enable/pause toggle (Req 19.5) — mutations never auto-retry (Req 3.6) ──
   const toggleMutation = useApiMutation(
     (c: CampaignVo) => setCampaignState(c.id, isRunning(c.status) ? 'pause' : 'enable'),
     {
@@ -528,9 +563,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   );
   const togglingId = toggleMutation.isPending ? toggleMutation.variables?.id ?? null : null;
 
-  // `mutate` is a stable reference across renders, so deriving `handleToggle`
-  // from it (rather than the whole mutation object) keeps the memoized column
-  // definitions below from being rebuilt on every render.
   const { mutate: toggleCampaignState } = toggleMutation;
   const handleToggle = useCallback(
     (c: CampaignVo) => {
@@ -539,11 +571,8 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     [toggleCampaignState],
   );
 
-  // Stable row-identity resolver so SharedDataTable's row-id memoization isn't
-  // invalidated by a fresh closure on every render.
   const rowId = useCallback((c: CampaignVo) => c.id, []);
 
-  // ── Bulk operation (Req 1.4 / 19.7) ────────────────────────────────
   const bulkMutation = useApiMutation(
     (vars: { operation: 'enable' | 'pause' | 'delete'; ids: string[] }) =>
       bulkCampaignOp(vars.ids, vars.operation),
@@ -566,8 +595,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
   const handleBulk = useCallback(
     (operation: 'enable' | 'pause' | 'delete', ids: string[]) => {
       if (ids.length === 0) return;
-      // Always confirm before running a bulk operation — destructive ones
-      // (delete) are irreversible, and enable/pause affect many live campaigns.
       setPendingBulk({ operation, ids });
     },
     [],
@@ -579,7 +606,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     setPendingBulk(null);
   }, [pendingBulk, bulkMutation]);
 
-  // ── Per-row budget update (Req 3.3) ─────────────────────────────────
   const updateBudgetMutation = useApiMutation(
     (vars: { id: string; dailyBudget?: number }) => updateCampaign(vars.id, { dailyBudget: vars.dailyBudget }),
     { onSuccess: invalidateCampaigns },
@@ -592,7 +618,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     setTargetAcosMax('');
   }
 
-  // ── FilterToolbar wiring ───────────────────────────────────────────
   const typeSelectors: TypeSelectorDef[] = useMemo(
     () => [
       {
@@ -636,6 +661,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     {
       key: 'enabled',
       header: '启用',
+      width: 64,
       render: (c) => {
         const running = isRunning(c.status);
         return (
@@ -661,6 +687,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
     {
       key: 'name',
       header: '广告活动',
+      width: 260,
       sortable: true,
       sortField: 'name',
       render: (c) => (
@@ -671,22 +698,98 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
             </span>
           )}
           <span className="text-sm font-medium text-slate-900 truncate max-w-[220px]" title={c.name}>
-            {c.name}
+            {c.name || c.campaignName || '未命名广告活动'}
           </span>
         </div>
       ),
+      exportValue: (c) => c.name || c.campaignName || '',
     },
-    { key: 'status', header: '投放状态', render: (c) => <StatusBadge status={c.status} /> },
-    { key: 'store', header: '店铺', render: () => storeName },
-    { key: 'hostingGoal', header: '托管目标', render: (c) => (c.hostingEnabled ? c.hostingGoal || '—' : '—') },
-    { key: 'targetAcos', header: '目标ACOS', render: (c) => (c.targetAcos != null ? formatPercent(c.targetAcos) : '—') },
+    { key: 'status', header: '状态', width: 96, render: (c) => <StatusBadge status={c.status} />, exportValue: (c) => c.status },
+    {
+      key: 'budget',
+      header: '日预算',
+      width: 104,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.budget, c.currency || 'USD')}</span>,
+      exportValue: (c) => c.budget,
+    },
+    {
+      key: 'spend',
+      header: 'Spend',
+      width: 104,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(c.spend, c.currency || 'USD')}</span>,
+      exportValue: (c) => c.spend,
+    },
+    {
+      key: 'sales',
+      header: 'Sales',
+      width: 104,
+      render: (c) => <span className="tabular-nums font-medium text-slate-900">{metricCurrency(c.sales, c.currency || 'USD')}</span>,
+      exportValue: (c) => c.sales,
+    },
+    {
+      key: 'orders',
+      header: 'Orders',
+      width: 82,
+      render: (c) => <span className="tabular-nums text-slate-700">{finiteMetric(c.orders) === undefined ? '—' : formatNumber(Number(c.orders))}</span>,
+      exportValue: (c) => c.orders,
+    },
+    {
+      key: 'clicks',
+      header: 'Clicks',
+      width: 82,
+      render: (c) => <span className="tabular-nums text-slate-700">{finiteMetric(c.clicks) === undefined ? '—' : formatNumber(Number(c.clicks))}</span>,
+      exportValue: (c) => c.clicks,
+    },
+    {
+      key: 'ctr',
+      header: 'CTR',
+      width: 78,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricPercent(campaignCtr(c))}</span>,
+      exportValue: (c) => campaignCtr(c),
+    },
+    {
+      key: 'cvr',
+      header: 'CVR',
+      width: 78,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricPercent(campaignCvr(c))}</span>,
+      exportValue: (c) => campaignCvr(c),
+    },
+    {
+      key: 'cpc',
+      header: 'CPC',
+      width: 88,
+      render: (c) => <span className="tabular-nums text-slate-700">{metricCurrency(campaignCpc(c), c.currency || 'USD')}</span>,
+      exportValue: (c) => campaignCpc(c),
+    },
     {
       key: 'acos',
-      header: 'ACOS最近',
+      header: 'ACoS',
+      width: 86,
       sortable: true,
       sortField: 'acos',
-      render: (c) => <span className={cn('font-medium tabular-nums', acosColor(c.acos))}>{c.acos > 0 ? formatPercent(c.acos) : '—'}</span>,
+      render: (c) => {
+        const acos = campaignAcos(c);
+        return (
+          <span className={cn('font-medium tabular-nums', acos === undefined ? 'text-slate-400' : acosColor(acos))}>
+            {metricPercent(acos)}
+          </span>
+        );
+      },
+      exportValue: (c) => campaignAcos(c),
     },
+    {
+      key: 'roas',
+      header: 'ROAS',
+      width: 80,
+      render: (c) => {
+        const roas = campaignRoas(c);
+        return <span className="font-medium tabular-nums text-slate-900">{roas === undefined ? '—' : `${roas.toFixed(2)}x`}</span>;
+      },
+      exportValue: (c) => campaignRoas(c),
+    },
+    { key: 'store', header: '店铺', render: () => storeName, exportValue: () => storeName },
+    { key: 'hostingGoal', header: '托管目标', render: (c) => (c.hostingEnabled ? c.hostingGoal || '—' : '—') },
+    { key: 'targetAcos', header: '目标ACoS', render: (c) => (c.targetAcos != null ? formatPercent(c.targetAcos) : '—'), exportValue: (c) => c.targetAcos },
     {
       key: 'aiManaged',
       header: 'AI入格',
@@ -698,11 +801,13 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
         ) : (
           <span className="text-xs text-slate-400">—</span>
         ),
+      exportValue: (c) => c.aiManaged,
     },
-    { key: 'targetingType', header: '投放类型', render: (c) => targetingTypeLabel(c.targetingType) },
+    { key: 'targetingType', header: '投放类型', render: (c) => targetingTypeLabel(c.targetingType), exportValue: (c) => c.targetingType },
     {
       key: 'rowActions',
       header: '',
+      width: 48,
       render: (c) => {
         const running = isRunning(c.status);
         return (
@@ -732,11 +837,13 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
 
   return (
     <div className="space-y-4">
-      {/* Header actions */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-500">
-          {loading ? '加载中...' : `${filtered.length} 个广告活动 · ${storeName}`}
-        </p>
+        <div>
+          <p className="text-sm text-slate-600">
+            {loading ? '加载中...' : `${filtered.length} 个广告活动 · ${storeName}`}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-400">默认展示预算、Spend、Sales、Orders、ACoS 与 ROAS；更多效率指标可在列管理中开启。</p>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { loadCampaigns(); loadTrend(); }} disabled={loading}>
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
@@ -749,10 +856,8 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
         </div>
       </div>
 
-      {/* Data-trend panel (Req 19.2) */}
       <TrendPanel trend={trend} loading={trendLoading} error={trendError} onRetry={loadTrend} />
 
-      {/* Filter bar: FilterToolbar (Req 1.3) + dedicated range inputs */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-3">
         <SharedDataTable<CampaignVo>
           key={columnConfigLoaded ? 'cols-loaded' : 'cols-loading'}
@@ -771,7 +876,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
           enableSavedViews
           enableColumnManagement
           onApplySavedView={handleApplySavedView}
-          initialHiddenColumns={savedColumnConfig?.hidden}
+          initialHiddenColumns={savedColumnConfig?.hidden ?? DEFAULT_HIDDEN_COLUMNS}
           initialColumnOrder={savedColumnConfig?.order}
           onColumnConfigChange={handleColumnConfigChange}
           filterState={filterState}
@@ -788,7 +893,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
           }
         />
 
-        {/* Dedicated range/text filters not modeled by FilterToolbar selectors */}
         <div className="flex flex-wrap items-center gap-2">
           <Input
             placeholder="父 ASIN"
@@ -846,7 +950,7 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
         mode="edit"
         title="编辑预算"
         fields={CAMPAIGN_BUDGET_FIELDS}
-        record={budgetCampaign}
+        record={budgetCampaign ? { ...budgetCampaign, dailyBudget: budgetCampaign.budget } : null}
         onClose={() => setBudgetCampaign(null)}
         saveLabel="保存预算"
         onSave={async (values) => {
@@ -861,8 +965,6 @@ export function CampaignsTab({ storeId }: { storeId: string | null }) {
         }}
       />
 
-      {/* Bulk-operation confirmation (especially destructive delete). Shows how
-          many campaigns will be affected before the operation runs. */}
       <AlertDialog open={!!pendingBulk} onOpenChange={(open) => { if (!open) setPendingBulk(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
