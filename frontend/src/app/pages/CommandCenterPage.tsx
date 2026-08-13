@@ -4,17 +4,25 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  BookOpen,
   Bot,
   CheckCircle2,
   Clock3,
   Database,
+  DollarSign,
   Link2,
   ListChecks,
   Package,
+  Percent,
   RefreshCw,
+  Search,
   ShieldCheck,
+  Sparkles,
   Store,
+  Target,
+  TrendingUp,
   Upload,
+  Workflow,
   XCircle,
 } from 'lucide-react';
 
@@ -37,13 +45,17 @@ import type {
   HostingHealth,
 } from '../lib/api';
 import { useStoreContext } from '../lib/StoreContext';
+import { usePermissions } from '../lib/PermissionContext';
 import { getChannelCapability } from '../lib/channelCapabilities';
+import { buildNavCommands } from '../lib/commandPalette';
 import { ErpPageHeader } from '../components/erp/ErpPageHeader';
 import { ErpEmptyState } from '../components/erp/ErpEmptyState';
 import { ErpLoadingSkeleton } from '../components/erp/ErpLoadingSkeleton';
 import { OnboardingWizard } from '../components/onboarding/OnboardingWizard';
 
 type Priority = 'urgent' | 'high' | 'medium' | 'low';
+
+type Tone = 'default' | 'warning' | 'danger' | 'success';
 
 interface WorkItem {
   id: string;
@@ -104,6 +116,45 @@ const priorityLabel: Record<Priority, string> = {
   medium: '中',
   low: '低',
 };
+
+const adsQuickActions = [
+  {
+    to: '/campaigns',
+    label: '广告活动',
+    description: 'Campaign、预算与投放状态',
+    icon: Target,
+  },
+  {
+    to: '/smart-diagnosis',
+    label: '智能诊断',
+    description: '快速定位高优先级异常',
+    icon: Sparkles,
+  },
+  {
+    to: '/automation-rules',
+    label: '自动化规则',
+    description: '出价、预算与运营规则',
+    icon: Workflow,
+  },
+  {
+    to: '/search-terms',
+    label: '搜索词',
+    description: '发现浪费和转化机会',
+    icon: Search,
+  },
+  {
+    to: '/keyword-library',
+    label: '关键词库',
+    description: '扩词、否词和关键词资产',
+    icon: BookOpen,
+  },
+  {
+    to: '/insight-agent',
+    label: 'Insight Agent',
+    description: '用 AI 查询经营与广告洞察',
+    icon: Bot,
+  },
+] as const;
 
 function asArray<T = any>(value: any): T[] {
   if (Array.isArray(value)) return value as T[];
@@ -260,6 +311,7 @@ function buildWorkItems(data: WorkbenchData, hasStore: boolean): WorkItem[] {
       count: actionableUploadJobs.length,
     });
   }
+
   const awaitingApproval = Number(data.hostingSummary?.awaiting_approval_count ?? 0);
   if (awaitingApproval > 0) {
     items.push({
@@ -294,7 +346,11 @@ function buildWorkItems(data: WorkbenchData, hasStore: boolean): WorkItem[] {
       priority: taskPriority(task),
       source: '任务',
       title: task?.title || task?.name || '未命名任务',
-      detail: task?.description || task?.taskType || task?.task_type || `创建时间：${formatDateTime(task?.createdAt ?? task?.created_at)}`,
+      detail:
+        task?.description ||
+        task?.taskType ||
+        task?.task_type ||
+        `创建时间：${formatDateTime(task?.createdAt ?? task?.created_at)}`,
       href: '/tasks',
       actionLabel: '处理任务',
     });
@@ -335,25 +391,25 @@ function DashboardSkeleton() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <div className="h-6 w-36 rounded bg-slate-200 animate-pulse" />
-          <div className="h-4 w-80 rounded bg-slate-100 animate-pulse" />
+          <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
+          <div className="h-4 w-80 animate-pulse rounded bg-slate-100" />
         </div>
-        <div className="h-9 w-24 rounded bg-slate-100 animate-pulse" />
+        <div className="h-9 w-24 animate-pulse rounded bg-slate-100" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 animate-pulse">
-            <div className="h-3 w-20 rounded bg-slate-200 mb-3" />
-            <div className="h-6 w-16 rounded bg-slate-200" />
+          <div key={index} className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="mb-3 h-3 w-20 animate-pulse rounded bg-slate-200" />
+            <div className="h-6 w-24 animate-pulse rounded bg-slate-200" />
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="rounded-lg border border-slate-200 bg-white p-4">
           <ErpLoadingSkeleton rows={8} />
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <ErpLoadingSkeleton rows={5} />
+          <ErpLoadingSkeleton rows={6} />
         </div>
       </div>
     </div>
@@ -371,7 +427,7 @@ function MetricTile({
   value: string | number;
   detail?: string;
   icon: React.ReactNode;
-  tone?: 'default' | 'warning' | 'danger' | 'success';
+  tone?: Tone;
 }) {
   const toneClass = {
     default: 'bg-slate-50 text-slate-600',
@@ -383,11 +439,34 @@ function MetricTile({
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs text-slate-500">{label}</span>
+        <span className="text-xs font-medium text-slate-500">{label}</span>
         <span className={cn('flex h-8 w-8 items-center justify-center rounded-lg', toneClass)}>{icon}</span>
       </div>
-      <div className="mt-3 text-2xl font-semibold text-slate-900">{value}</div>
-      {detail && <div className="mt-1 text-xs text-slate-500 truncate">{detail}</div>}
+      <div className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">{value}</div>
+      {detail && <div className="mt-1 truncate text-xs text-slate-500">{detail}</div>}
+    </div>
+  );
+}
+
+function PerformanceMetric({
+  label,
+  value,
+  detail,
+  icon,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 border-r border-slate-100 px-4 py-4 last:border-r-0">
+      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+        <span className="text-slate-400">{icon}</span>
+        {label}
+      </div>
+      <div className="mt-2 truncate text-xl font-semibold tracking-tight text-slate-950">{value}</div>
+      <div className="mt-1 truncate text-[11px] text-slate-400">{detail}</div>
     </div>
   );
 }
@@ -457,12 +536,19 @@ function DependencyStatus({ name, status }: { name: string; status: string }) {
 
 export function CommandCenterPage() {
   const { stores, storeId, loading: storeLoading, error: storeError, reload: reloadStores } = useStoreContext();
+  const { can } = usePermissions();
   const [data, setData] = useState<WorkbenchData>(emptyData);
   const [loading, setLoading] = useState(true);
 
   const selectedStore = stores.find((store) => store.id === storeId);
   const channel = getChannelCapability(selectedStore?.platform);
   const isAmazonStore = channel.platform === 'amazon';
+
+  const visibleRoutes = useMemo(() => new Set(buildNavCommands(can).map((command) => command.to)), [can]);
+  const quickActions = useMemo(
+    () => adsQuickActions.filter((action) => visibleRoutes.has(action.to)),
+    [visibleRoutes],
+  );
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -522,9 +608,7 @@ export function CommandCenterPage() {
   }, [isAmazonStore, storeId]);
 
   useEffect(() => {
-    if (!storeLoading) {
-      loadData();
-    }
+    if (!storeLoading) loadData();
   }, [loadData, storeLoading]);
 
   const workItems = useMemo(() => buildWorkItems(data, Boolean(storeId)), [data, storeId]);
@@ -574,6 +658,8 @@ export function CommandCenterPage() {
   const adSales = metricValue(overview.adSales);
   const acos = metricValue(overview.acos);
   const roas = adSpend > 0 ? adSales / adSpend : 0;
+  const adSalesShare = totalSales > 0 ? adSales / totalSales : 0;
+
   const connectionDataAvailable = !data.failures.some((failure) => failure.source === '平台连接');
   const productDataAvailable = !data.failures.some((failure) => failure.source === '商品');
   const uploadDataAvailable = !data.failures.some((failure) => failure.source === '发布任务');
@@ -581,6 +667,8 @@ export function CommandCenterPage() {
   const disconnectedCount = data.platformConnections.filter((connection) => !isConnected(connection)).length;
   const connectedCount = data.platformConnections.length - disconnectedCount;
   const awaitingApproval = Number(data.hostingSummary?.awaiting_approval_count ?? 0);
+  const hostingFailures = Number(data.hostingSummary?.failed_today_count ?? 0);
+  const estimatedSavings7d = Number(data.hostingSummary?.estimated_savings_7d ?? 0);
   const activeProducts = data.products.filter((product) => normalizeStatus(product?.status) === 'active').length;
   const pendingUploadJobs = data.uploadJobs.filter((job) =>
     ['draft', 'ready', 'approved'].includes(normalizeStatus(job?.status)),
@@ -600,18 +688,32 @@ export function CommandCenterPage() {
   return (
     <div className="space-y-4">
       <ErpPageHeader
-        title="今日运营工作台"
-        description={`${selectedStore?.name ?? '当前店铺'} · ${channel.channelLabel} · 广告、商品、发布与同步统一处理`}
+        title={isAmazonStore ? 'Amazon Ads 运营指挥台' : '今日运营工作台'}
+        description={
+          isAmazonStore
+            ? `${selectedStore?.name ?? '当前店铺'} · 先看广告结果，再处理异常与自动化优化`
+            : `${selectedStore?.name ?? '当前店铺'} · ${channel.channelLabel} · 广告、商品、发布与同步统一处理`
+        }
         actions={
           <div className="flex items-center gap-2">
             <OnboardingWizard />
-            <Link
-              to="/dashboard"
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              <Activity size={14} />
-              经营分析
-            </Link>
+            {isAmazonStore && visibleRoutes.has('/campaigns') ? (
+              <Link
+                to="/campaigns"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                <Target size={14} />
+                广告活动
+              </Link>
+            ) : (
+              <Link
+                to="/dashboard"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                <Activity size={14} />
+                经营分析
+              </Link>
+            )}
             <button
               onClick={loadData}
               className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
@@ -637,28 +739,95 @@ export function CommandCenterPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+      {isAmazonStore && (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-950">广告经营概览</h2>
+                <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">Amazon Ads</span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">把广告结果放在操作入口之前，减少在多个报表间来回切换。</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <Link to="/dashboard" className="font-medium text-slate-600 hover:text-slate-900">
+                查看经营分析
+              </Link>
+              {visibleRoutes.has('/campaigns') && (
+                <Link to="/campaigns" className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-700">
+                  进入广告活动
+                  <ArrowRight size={13} />
+                </Link>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 divide-y divide-slate-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0">
+            <PerformanceMetric
+              label="总销售额"
+              value={formatCurrency(totalSales, currency)}
+              detail="当前经营周期"
+              icon={<DollarSign size={14} />}
+            />
+            <PerformanceMetric
+              label="广告销售额"
+              value={formatCurrency(adSales, currency)}
+              detail={`${formatPercent(adSalesShare)} 销售来自广告`}
+              icon={<TrendingUp size={14} />}
+            />
+            <PerformanceMetric
+              label="广告花费"
+              value={formatCurrency(adSpend, currency)}
+              detail="已归因广告支出"
+              icon={<DollarSign size={14} />}
+            />
+            <PerformanceMetric
+              label="ACoS"
+              value={formatPercent(acos)}
+              detail="广告花费 / 广告销售额"
+              icon={<Percent size={14} />}
+            />
+            <PerformanceMetric
+              label="ROAS"
+              value={`${roas.toFixed(2)}x`}
+              detail="广告销售额 / 广告花费"
+              icon={<TrendingUp size={14} />}
+            />
+            <PerformanceMetric
+              label="预计节省 7 天"
+              value={formatCurrency(estimatedSavings7d, currency)}
+              detail="AI 托管估算"
+              icon={<Sparkles size={14} />}
+            />
+          </div>
+        </section>
+      )}
+
+      <div className={cn('grid grid-cols-1 gap-3 sm:grid-cols-2', isAmazonStore ? 'xl:grid-cols-4' : 'xl:grid-cols-6')}>
         <MetricTile
           label="待处理项"
           value={formatNumber(totalPending)}
-          detail={totalPending > 0 ? '来自真实接口状态' : '当前无阻塞事项'}
+          detail={totalPending > 0 ? '按风险和阻塞程度排序' : '当前无阻塞事项'}
           icon={<ListChecks size={16} />}
           tone={totalPending > 0 ? 'warning' : 'success'}
         />
-        <MetricTile
-          label="商品"
-          value={productDataAvailable ? formatNumber(data.products.length) : '-'}
-          detail={productDataAvailable ? activeProducts + ' 个在售' : '商品数据暂不可用'}
-          icon={<Package size={16} />}
-          tone={productDataAvailable && data.products.length > 0 ? 'default' : 'warning'}
-        />
-        <MetricTile
-          label="发布队列"
-          value={uploadDataAvailable ? formatNumber(pendingUploadJobs) : '-'}
-          detail={uploadDataAvailable ? failedUploadJobs + ' 个失败' : '发布数据暂不可用'}
-          icon={<Upload size={16} />}
-          tone={failedUploadJobs > 0 ? 'danger' : pendingUploadJobs > 0 ? 'warning' : 'success'}
-        />
+        {!isAmazonStore && (
+          <MetricTile
+            label="商品"
+            value={productDataAvailable ? formatNumber(data.products.length) : '-'}
+            detail={productDataAvailable ? `${activeProducts} 个在售` : '商品数据暂不可用'}
+            icon={<Package size={16} />}
+            tone={productDataAvailable && data.products.length > 0 ? 'default' : 'warning'}
+          />
+        )}
+        {!isAmazonStore && (
+          <MetricTile
+            label="发布队列"
+            value={uploadDataAvailable ? formatNumber(pendingUploadJobs) : '-'}
+            detail={uploadDataAvailable ? `${failedUploadJobs} 个失败` : '发布数据暂不可用'}
+            icon={<Upload size={16} />}
+            tone={failedUploadJobs > 0 ? 'danger' : pendingUploadJobs > 0 ? 'warning' : 'success'}
+          />
+        )}
         <MetricTile
           label="同步异常"
           value={formatNumber(data.failedSyncJobs.length)}
@@ -669,7 +838,7 @@ export function CommandCenterPage() {
         <MetricTile
           label="审批队列"
           value={formatNumber(awaitingApproval)}
-          detail={isAmazonStore ? 'Amazon Ads AI 托管待确认' : '当前渠道无托管审批'}
+          detail={isAmazonStore ? 'AI 托管决策待确认' : '当前渠道无托管审批'}
           icon={<ShieldCheck size={16} />}
           tone={awaitingApproval > 0 ? 'warning' : 'success'}
         />
@@ -682,12 +851,12 @@ export function CommandCenterPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="rounded-lg border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-900">优先处理</h2>
-              <p className="text-xs text-slate-500">按风险和阻塞程度排序</p>
+              <p className="text-xs text-slate-500">把异常、审批、AI 建议和同步问题合并到一个队列</p>
             </div>
             <Link to="/today-actions" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
               全部待办
@@ -710,105 +879,65 @@ export function CommandCenterPage() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-slate-900">接口连接</h2>
-              <Link to="/api-connections" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                管理
-                <ArrowRight size={13} />
-              </Link>
-            </div>
-            {!connectionDataAvailable ? (
-              <div className="px-4 py-6 text-sm text-slate-500">连接状态暂不可用。</div>
-            ) : data.platformConnections.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-slate-500">暂无平台连接。</div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {data.platformConnections.slice(0, 6).map((connection, index) => {
-                  const ok = isConnected(connection);
+          {isAmazonStore && quickActions.length > 0 && (
+            <div className="rounded-lg border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 px-4 py-3">
+                <h2 className="text-sm font-semibold text-slate-900">广告优化入口</h2>
+                <p className="mt-0.5 text-xs text-slate-500">高频操作不再依赖侧边栏逐级查找</p>
+              </div>
+              <div className="grid grid-cols-2 gap-px bg-slate-100">
+                {quickActions.map((action) => {
+                  const Icon = action.icon;
                   return (
-                    <div key={connection?.id ?? index} className="flex items-center gap-3 px-4 py-3">
-                      <StatusDot ok={ok} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-slate-800">{connectionName(connection)}</p>
-                        <p className="truncate text-xs text-slate-500">
-                          {connection?.platform || 'unknown'} · {connection?.marketplaceCode || connection?.marketplace || '未设置站点'}
-                        </p>
+                    <Link
+                      key={action.to}
+                      to={action.to}
+                      className="group bg-white p-3 hover:bg-slate-50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600">
+                          <Icon size={15} />
+                        </span>
+                        <ArrowRight size={13} className="text-slate-300 group-hover:text-blue-500" />
                       </div>
-                      <span className="text-xs text-slate-400">{ok ? '可用' : '未就绪'}</span>
-                    </div>
+                      <p className="mt-2 text-sm font-medium text-slate-900">{action.label}</p>
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500">{action.description}</p>
+                    </Link>
                   );
                 })}
               </div>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h2 className="text-sm font-semibold text-slate-900">商品与发布</h2>
-              <Link to="/products" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
-                管理商品
-                <ArrowRight size={13} />
-              </Link>
             </div>
-            <div className="grid grid-cols-2 gap-3 px-4 py-3">
-              <div>
-                <p className="text-xs text-slate-500">商品总数</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{productDataAvailable ? formatNumber(data.products.length) : '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">在售商品</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{productDataAvailable ? formatNumber(activeProducts) : '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">待发布</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{uploadDataAvailable ? formatNumber(pendingUploadJobs) : '-'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500">发布失败</p>
-                <p className="mt-1 text-lg font-semibold text-slate-900">{uploadDataAvailable ? formatNumber(failedUploadJobs) : '-'}</p>
-              </div>
-            </div>
-            <Link
-              to="/product-upload"
-              className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              <span className="inline-flex items-center gap-2">
-                <Upload size={15} />
-                {channel.productPublishLabel}
-              </span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
+          )}
 
           {isAmazonStore ? (
             <div className="rounded-lg border border-slate-200 bg-white">
               <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-                <h2 className="text-sm font-semibold text-slate-900">Amazon Ads 托管链路</h2>
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">AI 托管链路</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">审批、执行与依赖健康状态</p>
+                </div>
                 <span className="inline-flex items-center gap-1 rounded border border-slate-200 px-2 py-0.5 text-xs text-slate-600">
                   <Clock3 size={12} />
                   {formatDateTime(data.hostingHealth?.checked_at)}
                 </span>
               </div>
               <div className="px-4 py-3">
-                <div className="grid grid-cols-2 gap-3 border-b border-slate-100 pb-3">
+                <div className="grid grid-cols-3 gap-3 border-b border-slate-100 pb-3">
                   <div>
-                    <p className="text-xs text-slate-500">预计节省 7 天</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">
-                      {formatCurrency(Number(data.hostingSummary?.estimated_savings_7d ?? 0), currency)}
+                    <p className="text-xs text-slate-500">待审批</p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatNumber(awaitingApproval)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-500">今日失败</p>
+                    <p className={cn('mt-1 text-lg font-semibold', hostingFailures > 0 ? 'text-red-600' : 'text-slate-900')}>
+                      {formatNumber(hostingFailures)}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500">ACoS</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatPercent(acos)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">广告销售额</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">{formatCurrency(adSales, currency)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500">ROAS</p>
-                    <p className="mt-1 text-lg font-semibold text-slate-900">{roas.toFixed(2)}x</p>
+                    <p className="text-xs text-slate-500">7 天节省</p>
+                    <p className="mt-1 truncate text-lg font-semibold text-slate-900">
+                      {formatCurrency(estimatedSavings7d, currency)}
+                    </p>
                   </div>
                 </div>
                 {data.hostingHealth?.dependencies ? (
@@ -824,6 +953,15 @@ export function CommandCenterPage() {
                   </div>
                 )}
               </div>
+              {visibleRoutes.has('/approvals') && (
+                <Link
+                  to="/approvals"
+                  className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  查看托管审批
+                  <ArrowRight size={14} />
+                </Link>
+              )}
             </div>
           ) : (
             <div className="rounded-lg border border-slate-200 bg-white">
@@ -831,7 +969,7 @@ export function CommandCenterPage() {
                 <h2 className="text-sm font-semibold text-slate-900">{channel.adMonitorLabel}</h2>
                 {channel.adConnectionPlatform !== 'none' && (
                   <Link
-                    to={'/data-sync?platform=' + channel.adConnectionPlatform}
+                    to={`/data-sync?platform=${channel.adConnectionPlatform}`}
                     className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
                   >
                     管理连接
@@ -855,16 +993,52 @@ export function CommandCenterPage() {
             </div>
           )}
 
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <div>
-                <p className="text-xs text-slate-500">总销售额</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{formatCurrency(totalSales, currency)}</p>
+                <h2 className="text-sm font-semibold text-slate-900">业务链路状态</h2>
+                <p className="mt-0.5 text-xs text-slate-500">商品、发布、同步与接口连接压缩到一处</p>
+              </div>
+              <Link to="/data-sync" className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                数据同步
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 px-4 py-3">
+              <div>
+                <p className="text-xs text-slate-500">商品 / 在售</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">
+                  {productDataAvailable ? `${formatNumber(data.products.length)} / ${formatNumber(activeProducts)}` : '-'}
+                </p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">广告花费</p>
-                <p className="mt-1 text-base font-semibold text-slate-900">{formatCurrency(adSpend, currency)}</p>
+                <p className="text-xs text-slate-500">待发布 / 失败</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">
+                  {uploadDataAvailable ? `${formatNumber(pendingUploadJobs)} / ${formatNumber(failedUploadJobs)}` : '-'}
+                </p>
               </div>
+              <div>
+                <p className="text-xs text-slate-500">可用连接</p>
+                <p className="mt-1 text-base font-semibold text-slate-900">
+                  {connectionDataAvailable ? formatNumber(connectedCount) : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">同步失败</p>
+                <p className={cn('mt-1 text-base font-semibold', data.failedSyncJobs.length > 0 ? 'text-red-600' : 'text-slate-900')}>
+                  {formatNumber(data.failedSyncJobs.length)}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 border-t border-slate-100">
+              <Link to="/products" className="flex items-center justify-between border-r border-slate-100 px-4 py-3 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                商品
+                <Package size={14} />
+              </Link>
+              <Link to="/product-upload" className="flex items-center justify-between px-4 py-3 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                发布
+                <Upload size={14} />
+              </Link>
             </div>
           </div>
         </div>
