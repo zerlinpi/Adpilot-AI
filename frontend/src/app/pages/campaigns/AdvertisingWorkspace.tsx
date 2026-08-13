@@ -26,6 +26,20 @@ const TAB_LABEL: Readonly<Record<CampaignsTabKey, string>> = Object.fromEntries(
   CAMPAIGNS_TABS.map((t) => [t.key, t.label]),
 ) as Record<CampaignsTabKey, string>;
 
+/**
+ * The highest-frequency Amazon Ads entity path. These are not new routes or
+ * views; each step activates an existing Campaigns_Workspace tab. Keeping the
+ * path visible above the broader feature taxonomy gives operators a predictable
+ * Campaign → Ad Group → Targeting → Search Term workflow without first having
+ * to decide which feature group owns the next object.
+ */
+const OPERATOR_FLOW: readonly CampaignsTabKey[] = [
+  'campaigns',
+  'adGroups',
+  'targeting',
+  'searchTerms',
+] as const;
+
 export interface AdvertisingWorkspaceProps {
   /**
    * Renders the content for the currently selected tab. The workspace calls this
@@ -156,6 +170,55 @@ export function AdvertisingWorkspace({
 
       {/* Collapsible KPI panel — header area, above the navigation (Req 30.1) */}
       {kpiPanel}
+
+      {/*
+        Operator flow — a stable entity path independent of the broader feature
+        grouping below. It deliberately reuses the existing tabs so state,
+        permissions and data loading remain unchanged.
+      */}
+      <nav
+        aria-label="广告对象操作链路"
+        className="overflow-x-auto rounded-lg border border-slate-200 bg-white"
+      >
+        <div className="flex min-w-max items-center px-2 py-2">
+          <span className="px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            操作链路
+          </span>
+          {OPERATOR_FLOW.map((tabKey, index) => {
+            const selected = activeTab === tabKey;
+            return (
+              <div key={tabKey} className="flex items-center">
+                {index > 0 && (
+                  <span aria-hidden="true" className="px-1 text-xs text-slate-300">
+                    →
+                  </span>
+                )}
+                <button
+                  type="button"
+                  aria-current={selected ? 'step' : undefined}
+                  onClick={() => selectTab(tabKey)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                    selected
+                      ? 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-200'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                      selected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500',
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  {TAB_LABEL[tabKey]}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </nav>
 
       {/* Group navigation — exactly the four groups (Req 28.1) */}
       <div
