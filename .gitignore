@@ -15,9 +15,10 @@ target/
 *.pem
 *.key
 
-# ── Logs ────────────────────────────────────────────────────
+# ── Logs / generated test output ─────────────────────────────
 *.log
 logs/
+**/test-output*.txt
 
 # ── Database / tooling artifacts ────────────────────────────
 .jqwik-database
