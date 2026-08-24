@@ -30,12 +30,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for {@link RuleTemplateEvaluator} (Req 25.3): the scheduled
- * condition-to-action evaluator must apply (record) a template's action exactly
- * when the condition holds for a linked object's metrics, never when it does
- * not, and must isolate per-object failures.
- */
+/** Unit tests for the scheduled condition-to-action evaluator. */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class RuleTemplateEvaluatorTest {
@@ -87,17 +82,23 @@ class RuleTemplateEvaluatorTest {
                 .build();
     }
 
+    private void stubSingleTemplate(AutomationRuleTemplateEntity tpl,
+                                    UUID campaignId,
+                                    PerformanceDailyEntity performance) {
+        when(templateMapper.selectList(any())).thenReturn(List.of(tpl));
+        when(linkMapper.selectList(any())).thenReturn(List.of(link(tpl.getId(), campaignId)));
+        when(performanceDailyMapper.selectList(any(LambdaQueryWrapper.class)))
+                .thenReturn(List.of(performance));
+    }
+
     @Test
     void appliesActionWhenConditionTrue() {
-        // condition: acos > 25 ; metrics give acos = 50% (spend 50, sales 100)
         AutomationRuleTemplateEntity tpl = template(
                 "{\"metric\":\"acos\",\"op\":\"gt\",\"value\":25}",
                 "{\"type\":\"bid_adjustment\",\"params\":{\"deltaPct\":-10}}");
         UUID campaignId = UUID.randomUUID();
-        when(templateMapper.selectList(any())).thenReturn(List.of(tpl));
-        when(linkMapper.selectList(any())).thenReturn(List.of(link(tpl.getId(), campaignId)));
-        when(performanceDailyMapper.selectList(any(LambdaQueryWrapper.class)))
-                .thenReturn(List.of(perf(campaignId, new BigDecimal("50"), new BigDecimal("100"))));
+        stubSingleTemplate(tpl, campaignId,
+                perf(campaignId, new BigDecimal("50"), new BigDecimal("100")));
 
         RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
 
@@ -114,15 +115,12 @@ class RuleTemplateEvaluatorTest {
 
     @Test
     void doesNotApplyActionWhenConditionFalse() {
-        // condition: acos > 25 ; metrics give acos = 10% (spend 10, sales 100) -> false
         AutomationRuleTemplateEntity tpl = template(
                 "{\"metric\":\"acos\",\"op\":\"gt\",\"value\":25}",
                 "{\"type\":\"bid_adjustment\",\"params\":{\"deltaPct\":-10}}");
         UUID campaignId = UUID.randomUUID();
-        when(templateMapper.selectList(any())).thenReturn(List.of(tpl));
-        when(linkMapper.selectList(any())).thenReturn(List.of(link(tpl.getId(), campaignId)));
-        when(performanceDailyMapper.selectList(any(LambdaQueryWrapper.class)))
-                .thenReturn(List.of(perf(campaignId, new BigDecimal("10"), new BigDecimal("100"))));
+        stubSingleTemplate(tpl, campaignId,
+                perf(campaignId, new BigDecimal("10"), new BigDecimal("100")));
 
         RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
 
@@ -131,8 +129,52 @@ class RuleTemplateEvaluatorTest {
     }
 
     @Test
+    void frontendConversionRateMetricAliasTriggersCorrectly() {
+        AutomationRuleTemplateEntity tpl = template(
+                "{\"metric\":\"conversion_rate\",\"op\":\"gte\",\"value\":10}",
+                "{\"type\":\"pause\"}");
+        UUID campaignId = UUID.randomUUID();
+        stubSingleTemplate(tpl, campaignId,
+                perf(campaignId, new BigDecimal("20"), new BigDecimal("100")));
+
+        RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
+
+        assertThat(summary.getActionsApplied()).isEqualTo(1);
+        verify(automationExecutionMapper).insert(any());
+    }
+
+    @Test
+    void zeroSpendRoasUsesSentinelInsteadOfArtificialDivisor() {
+        AutomationRuleTemplateEntity tpl = template(
+                "{\"metric\":\"roas\",\"op\":\"gt\",\"value\":0}",
+                "{\"type\":\"pause\"}");
+        UUID campaignId = UUID.randomUUID();
+        stubSingleTemplate(tpl, campaignId,
+                perf(campaignId, BigDecimal.ZERO, new BigDecimal("100")));
+
+        RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
+
+        assertThat(summary.getActionsApplied()).isZero();
+        verify(automationExecutionMapper, never()).insert(any());
+    }
+
+    @Test
+    void cpcAliasUsesSharedMetricDefinition() {
+        AutomationRuleTemplateEntity tpl = template(
+                "{\"metric\":\"cpc\",\"op\":\"eq\",\"value\":0.5}",
+                "{\"type\":\"pause\"}");
+        UUID campaignId = UUID.randomUUID();
+        stubSingleTemplate(tpl, campaignId,
+                perf(campaignId, new BigDecimal("50"), new BigDecimal("100")));
+
+        RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
+
+        assertThat(summary.getActionsApplied()).isEqualTo(1);
+        verify(automationExecutionMapper).insert(any());
+    }
+
+    @Test
     void doesNotFireWhenObjectHasNoMetrics() {
-        // Absent metric => comparison is false => no action.
         AutomationRuleTemplateEntity tpl = template(
                 "{\"metric\":\"acos\",\"op\":\"gt\",\"value\":25}",
                 "{\"type\":\"bid_adjustment\"}");
@@ -161,8 +203,6 @@ class RuleTemplateEvaluatorTest {
 
         RuleTemplateEvaluator.EvaluationSummary summary = evaluator.runOnce();
 
-        // The malformed template is counted as failed but does not abort the run;
-        // the good template still applies its action.
         assertThat(summary.getTemplatesProcessed()).isEqualTo(2);
         assertThat(summary.getTemplatesFailed()).isEqualTo(1);
         assertThat(summary.getActionsApplied()).isEqualTo(1);
