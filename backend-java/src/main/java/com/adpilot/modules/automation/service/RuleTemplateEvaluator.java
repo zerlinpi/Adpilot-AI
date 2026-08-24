@@ -27,34 +27,17 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
- * Scheduled evaluator that drives automation rule templates (Req 25.3): on each
- * tick it loads every enabled {@link AutomationRuleTemplateEntity}, parses its
- * stored condition / action into the pure value types consumed by
- * {@link RuleConditionEvaluator}, and for every linked object (campaign /
- * target / keyword) computes the object's recent metrics from
- * {@code performance_daily} and applies the template's action <strong>exactly
- * when</strong> the condition holds — never when it is false.
+ * Scheduled evaluator for persisted automation rule templates.
  *
- * <p>The actual decision is delegated to the pure
- * {@link RuleConditionEvaluator#resolveAction} so the soundness contract
- * exercised by Property 5 (task 11.6) governs production behavior: the action
- * is applied iff the returned optional is present. Each applied action writes an
- * auditable {@code automation_executions} row (status {@code applied}, source
- * {@code rule_template}) so it can be reviewed and rolled back.
+ * <p>Conditions are evaluated against recent performance for each linked object.
+ * Metric computation is intentionally delegated to {@link AdMetrics} so the
+ * automation engine and reporting surfaces use the same ACoS/ROAS/CTR/CVR/CPC
+ * definitions and the same zero-denominator behavior.
  *
- * <p>Per-template and per-object failures are isolated: an exception while
- * evaluating one template or one linked object is logged and skipped so it
- * never aborts the whole tick (mirrors {@code ApprovalExpirationSweeper} and
- * {@code AiHostingOptimizer}). Scheduling is enabled application-wide via
- * {@code SchedulerConfig} ({@code @EnableScheduling}); the cadence is
- * configurable through {@code adpilot.automation.rule-eval-ms} (default 5 min).
- *
- * <p>Live Amazon Ads actuation is out of scope — applied actions are recorded in
- * the project's own {@code automation_executions} table (the stubbed
- * {@code PlatformConnector} seam).
+ * <p>Per-template and per-object failures are isolated. A bad rule or object is
+ * logged and skipped without aborting the rest of the evaluation tick.
  */
 @Slf4j
 @Component
@@ -86,11 +69,6 @@ public class RuleTemplateEvaluator {
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * Scheduled entry point (Req 25.3). Fires on the configured fixed delay and
-     * delegates to {@link #runOnce()}; the run is fully self-contained and never
-     * propagates an exception so the scheduler keeps ticking.
-     */
     @Scheduled(fixedDelayString = "${adpilot.automation.rule-eval-ms:300000}")
     public void evaluate() {
         try {
@@ -105,11 +83,7 @@ public class RuleTemplateEvaluator {
         }
     }
 
-    /**
-     * Evaluate every enabled template once and return an aggregate summary.
-     * Per-template failures are isolated (logged and skipped) so one template's
-     * error never aborts the run.
-     */
+    /** Evaluate every enabled template once and return an aggregate summary. */
     public EvaluationSummary runOnce() {
         List<AutomationRuleTemplateEntity> templates = templateMapper.selectList(
                 new LambdaQueryWrapper<AutomationRuleTemplateEntity>()
@@ -130,11 +104,7 @@ public class RuleTemplateEvaluator {
         return summary;
     }
 
-    /**
-     * Evaluate a single template against every object linked to it. The
-     * condition / action are parsed once; each linked object is evaluated in
-     * isolation so a single bad object never aborts the template.
-     */
+    /** Evaluate a single template against every object linked to it. */
     public void evaluateTemplate(AutomationRuleTemplateEntity template, EvaluationSummary summary) {
         if (template == null) {
             return;
@@ -150,7 +120,6 @@ public class RuleTemplateEvaluator {
             summary.objectsEvaluated++;
             try {
                 Map<String, BigDecimal> metrics = computeMetrics(link);
-                // The single decision point: action applies iff condition is true.
                 Optional<RuleAction> resolved = RuleConditionEvaluator.resolveAction(condition, action, metrics);
                 if (resolved.isPresent()) {
                     writeExecution(template, link, resolved.get(), metrics);
@@ -165,12 +134,12 @@ public class RuleTemplateEvaluator {
     }
 
     /**
-     * Aggregate a linked object's recent metrics from {@code performance_daily}
-     * over the lookback window, keyed by lower-case metric name so the condition
-     * grammar (e.g. {@code acos}, {@code spend}, {@code ctr}) can reference them.
-     * Returns an empty map when the object has no performance signal — an absent
-     * metric makes any comparison {@code false}, so a template never fires on a
-     * complete absence of data.
+     * Aggregate recent metrics for a linked object.
+     *
+     * <p>The metric vocabulary deliberately contains both canonical names and
+     * compatibility aliases used by the existing frontend rule builder. In
+     * particular, {@code conversion_rate} aliases {@code cvr}; this prevents
+     * previously-created conversion-rate rules from silently evaluating false.
      */
     private Map<String, BigDecimal> computeMetrics(AutomationRuleTemplateLinkEntity link) {
         LocalDate since = LocalDate.now().minusDays(Math.max(0, lookbackDays));
@@ -192,7 +161,6 @@ public class RuleTemplateEvaluator {
                         .eq(PerformanceDailyEntity::getEntityId, link.getObjectId());
                 break;
             default:
-                // Unknown object type: no metrics, so nothing fires.
                 return Map.of();
         }
 
@@ -214,20 +182,25 @@ public class RuleTemplateEvaluator {
             orders = orders.add(nvl(row.getOrders()));
         }
 
+        BigDecimal acos = AdMetrics.acos(spend, sales);
+        BigDecimal roas = AdMetrics.roas(sales, spend);
+        BigDecimal ctr = AdMetrics.ctr(clicks, impressions);
+        BigDecimal cvr = AdMetrics.cvr(orders, clicks);
+        BigDecimal cpc = AdMetrics.cpc(spend, clicks);
+
         Map<String, BigDecimal> metrics = new LinkedHashMap<>();
         metrics.put("impressions", impressions);
         metrics.put("clicks", clicks);
         metrics.put("spend", spend);
         metrics.put("sales", sales);
         metrics.put("orders", orders);
-        // Derived metrics computed with the shared, total (no-throw) helpers.
-        metrics.put("acos", AdMetrics.acos(spend, sales));
-        metrics.put("roas", sales.signum() == 0 ? BigDecimal.ZERO
-                : sales.divide(spend.signum() == 0 ? BigDecimal.ONE : spend, 4, java.math.RoundingMode.HALF_UP));
-        metrics.put("ctr", ratioPercent(clicks, impressions));
-        metrics.put("cvr", ratioPercent(orders, clicks));
-        metrics.put("avg_cpc", clicks.signum() == 0 ? BigDecimal.ZERO
-                : spend.divide(clicks, 4, java.math.RoundingMode.HALF_UP));
+        metrics.put("acos", acos);
+        metrics.put("roas", roas);
+        metrics.put("ctr", ctr);
+        metrics.put("cvr", cvr);
+        metrics.put("conversion_rate", cvr);
+        metrics.put("avg_cpc", cpc);
+        metrics.put("cpc", cpc);
         return metrics;
     }
 
@@ -263,15 +236,6 @@ public class RuleTemplateEvaluator {
         } catch (Exception e) {
             return "{}";
         }
-    }
-
-    private static BigDecimal ratioPercent(BigDecimal numerator, BigDecimal denominator) {
-        if (denominator == null || denominator.signum() == 0) {
-            return BigDecimal.ZERO;
-        }
-        return numerator.divide(denominator, 8, java.math.RoundingMode.HALF_UP)
-                .multiply(new BigDecimal("100"))
-                .setScale(4, java.math.RoundingMode.HALF_UP);
     }
 
     private static BigDecimal nvl(Number value) {
