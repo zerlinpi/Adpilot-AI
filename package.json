@@ -4,11 +4,14 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "concurrently \"pnpm dev:frontend\" \"pnpm dev:backend\"",
-    "dev:frontend": "cd frontend && pnpm dev",
-    "dev:backend": "cd backend-java && .\\mvnw.cmd spring-boot:run",
-    "install:all": "cd frontend && pnpm install",
-    "build": "cd frontend && pnpm build",
-    "backend:test": "cd backend-java && .\\mvnw.cmd test"
+    "dev:frontend": "pnpm --dir frontend dev",
+    "dev:backend": "node scripts/maven.mjs spring-boot:run",
+    "install:all": "pnpm --dir frontend install",
+    "build": "pnpm --dir frontend build",
+    "frontend:typecheck": "pnpm --dir frontend typecheck",
+    "frontend:test": "pnpm --dir frontend test",
+    "backend:test": "node scripts/maven.mjs -B -ntp test",
+    "verify": "pnpm frontend:typecheck && pnpm frontend:test && pnpm build && pnpm backend:test"
   },
   "devDependencies": {
     "concurrently": "^10.0.3"
